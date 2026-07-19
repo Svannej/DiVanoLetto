@@ -42,6 +42,21 @@ let state = {
         tv: [],
         anime: [],
     },
+    // Catalog state
+    catalog: {
+        results: [],
+        page: 1,
+        totalPages: 1,
+        loading: false,
+        genres: { movie: [], tv: [] },
+        filters: {
+            type: 'movie',
+            genre: '',
+            year: '',
+            rating: '',
+            duration: '',
+        },
+    },
 };
 
 /*  List item shape:
@@ -152,6 +167,26 @@ const TMDB = {
     async getDetails(id, type) {
         const mediaType = type === 'anime' ? 'tv' : type;
         return await this._fetch(`/${mediaType}/${id}`);
+    },
+
+    async getCredits(id, type) {
+        const mediaType = type === 'anime' ? 'tv' : type;
+        const data = await this._fetch(`/${mediaType}/${id}/credits`);
+        if (!data || !data.cast) return [];
+        return data.cast.slice(0, 10);
+    },
+
+    async getGenreList(type = 'movie') {
+        const data = await this._fetch(`/genre/${type}/list`);
+        return data && data.genres ? data.genres : [];
+    },
+
+    async discover(type = 'movie', params = {}) {
+        return await this._fetch(`/discover/${type}`, params);
+    },
+
+    async trending(type = 'all', timeWindow = 'week') {
+        return await this._fetch(`/trending/${type}/${timeWindow}`);
     },
 
     async getWatchProviders(id, type) {
@@ -650,6 +685,14 @@ function renderRow(items, label, emoji, statusKey) {
         return section;
     }
 
+    // "Da vedere" uses a 2-row grid layout; others use horizontal scroll
+    if (statusKey === 'to_watch') {
+        const gridItems = el('div', { className: 'row-items-grid' });
+        items.forEach(item => gridItems.appendChild(renderCard(item)));
+        section.appendChild(gridItems);
+        return section;
+    }
+
     // Row wrapper with scroll buttons
     const wrapper = el('div', { className: 'row-wrapper' });
 
@@ -838,7 +881,10 @@ function renderSearchResults(results) {
         const posterUrl = TMDB.imgUrl(result.poster_path, 'w342');
         const alreadyInList = isInList(result.id, state.currentTab);
 
-        const card = el('div', { className: 'search-card' });
+        const card = el('div', {
+            className: 'search-card',
+            onClick: () => openSearchPreview(result),
+        });
 
         // Poster
         if (posterUrl) {
@@ -1287,7 +1333,11 @@ function renderProfileEditContent() {
 // DATA OPERATIONS
 // ──────────────────────────────────────────────────────────────
 async function addToList(tmdbResult) {
-    const tab = state.currentTab;
+    let tab = state.currentTab;
+    // When in catalog, use the filter type to determine the list
+    if (tab === 'catalog') {
+        tab = state.catalog.filters.type || 'movie';
+    }
     const tmdbId = tmdbResult.id;
 
     if (isInList(tmdbId, tab)) {
@@ -1369,6 +1419,20 @@ function updateItemNotes(tmdbId, notes) {
 // TAB NAVIGATION
 // ──────────────────────────────────────────────────────────────
 function switchTab(tab) {
+    // Handle catalog tab separately
+    if (tab === 'catalog') {
+        state.currentTab = tab;
+        $$('.nav-tab').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+        $('#hero').classList.add('hidden');
+        $('#main-content').classList.add('hidden');
+        $('#catalog-page').classList.remove('hidden');
+        $('#fab-add').classList.add('hidden');
+        initCatalog();
+        return;
+    }
+
     state.currentTab = tab;
 
     // Update active tab in both navs
@@ -1376,8 +1440,507 @@ function switchTab(tab) {
         btn.classList.toggle('active', btn.dataset.tab === tab);
     });
 
+    // Show home layout, hide catalog
+    $('#hero').classList.remove('hidden');
+    $('#main-content').classList.remove('hidden');
+    $('#catalog-page').classList.add('hidden');
+    $('#fab-add').classList.remove('hidden');
+
     renderHero();
     renderContent();
+}
+
+// ──────────────────────────────────────────────────────────────
+// SEARCH PREVIEW MODAL
+// ──────────────────────────────────────────────────────────────
+async function openSearchPreview(tmdbResult) {
+    const modal = $('#search-preview-modal');
+    modal.classList.remove('hidden');
+    const container = $('#search-preview-content');
+    container.innerHTML = `
+        <div class="search-loading" style="min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <div class="loading-spinner"></div>
+            <p style="margin-top: 12px; color: var(--text-muted);">Caricamento dettagli...</p>
+        </div>
+    `;
+
+    const tab = state.currentTab === 'catalog' ? (state.catalog.filters.type === 'tv' ? 'tv' : 'movie') : state.currentTab;
+    const mediaType = tab === 'anime' ? 'tv' : tab;
+
+    // Fetch details, credits, and providers in parallel
+    const [details, credits, providers] = await Promise.all([
+        TMDB.getDetails(tmdbResult.id, tab),
+        TMDB.getCredits(tmdbResult.id, tab),
+        TMDB.getWatchProviders(tmdbResult.id, tab),
+    ]);
+
+    container.innerHTML = '';
+
+    // Backdrop
+    const backdropWrap = el('div', { className: 'detail-backdrop-wrap' });
+    const backdropPath = tmdbResult.backdrop_path || (details && details.backdrop_path);
+    const backdropUrl = TMDB.imgUrl(backdropPath, 'w1280');
+    if (backdropUrl) {
+        backdropWrap.appendChild(el('img', { className: 'detail-backdrop-img', src: backdropUrl, alt: '' }));
+    } else {
+        backdropWrap.appendChild(el('div', { className: 'detail-backdrop-empty' }));
+    }
+    backdropWrap.appendChild(el('div', { className: 'detail-backdrop-gradient' }));
+    container.appendChild(backdropWrap);
+
+    // Body
+    const body = el('div', { className: 'detail-body' });
+
+    // Header (poster + info)
+    const header = el('div', { className: 'detail-header' });
+    const posterWrap = el('div', { className: 'detail-poster' });
+    const posterUrl = TMDB.imgUrl(tmdbResult.poster_path, 'w342');
+    if (posterUrl) {
+        posterWrap.appendChild(el('img', { src: posterUrl, alt: tmdbResult.title || tmdbResult.name }));
+    } else {
+        posterWrap.appendChild(el('div', { className: 'detail-poster-empty', textContent: '🎬' }));
+    }
+    header.appendChild(posterWrap);
+
+    const info = el('div', { className: 'detail-info' });
+    info.appendChild(el('h2', { className: 'detail-title', textContent: tmdbResult.title || tmdbResult.name || '' }));
+
+    const meta = el('div', { className: 'detail-meta' });
+    const voteAvg = tmdbResult.vote_average || (details && details.vote_average);
+    if (voteAvg) {
+        meta.appendChild(el('span', { className: 'detail-tmdb-rating', innerHTML: `⭐ ${voteAvg.toFixed(1)}/10` }));
+    }
+    const year = getYear(tmdbResult) || (details ? getYear(details) : '');
+    if (year) meta.appendChild(el('span', { className: 'detail-year', textContent: year }));
+
+    // Runtime
+    if (details && details.runtime) {
+        const h = Math.floor(details.runtime / 60);
+        const m = details.runtime % 60;
+        meta.appendChild(el('span', { textContent: h > 0 ? `${h}h ${m}min` : `${m}min`, style: { color: 'var(--text-muted)' } }));
+    }
+    if (details && details.number_of_seasons) {
+        meta.appendChild(el('span', { textContent: `${details.number_of_seasons} stagion${details.number_of_seasons === 1 ? 'e' : 'i'}`, style: { color: 'var(--text-muted)' } }));
+    }
+    info.appendChild(meta);
+
+    // Genres
+    const genres = details && details.genres ? details.genres.map(g => g.name) : [];
+    if (genres.length) {
+        info.appendChild(el('div', { className: 'detail-genres', textContent: genres.join(', ') }));
+    }
+    header.appendChild(info);
+    body.appendChild(header);
+
+    // Overview
+    const overview = tmdbResult.overview || (details && details.overview) || '';
+    if (overview) {
+        body.appendChild(el('p', { className: 'detail-overview', textContent: overview }));
+    }
+
+    // Cast section
+    if (credits && credits.length > 0) {
+        const castSection = el('div', { className: 'preview-cast-section' });
+        castSection.appendChild(el('span', { className: 'preview-cast-label', textContent: '🎭 Cast principale' }));
+        const castList = el('div', { className: 'preview-cast-list' });
+        credits.forEach(actor => {
+            const imgUrl = actor.profile_path ? TMDB.imgUrl(actor.profile_path, 'w185') : null;
+            const castItem = el('div', { className: 'preview-cast-item' }, [
+                imgUrl ? el('img', { className: 'preview-cast-img', src: imgUrl, alt: actor.name, loading: 'lazy' })
+                       : el('div', { className: 'preview-cast-img', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }, textContent: '👤' }),
+                el('span', { className: 'preview-cast-name', textContent: actor.name }),
+                el('span', { className: 'preview-cast-character', textContent: actor.character || '' }),
+            ]);
+            castList.appendChild(castItem);
+        });
+        castSection.appendChild(castList);
+        body.appendChild(castSection);
+    }
+
+    // Watch Providers
+    if (providers && providers.length > 0) {
+        const provSection = el('div', { className: 'detail-providers', style: { marginTop: '20px' } });
+        provSection.appendChild(el('span', { className: 'detail-providers-label', textContent: '📺 Disponibile su' }));
+        const provList = el('div', { className: 'detail-providers-list' });
+        providers.forEach(p => {
+            const logoUrl = TMDB.imgUrl(p.logo, 'w92');
+            const badge = el('div', { className: 'provider-badge' }, [
+                ...(logoUrl ? [el('img', { className: 'provider-logo', src: logoUrl, alt: p.name })] : []),
+                el('span', { className: 'provider-name', textContent: p.name }),
+            ]);
+            provList.appendChild(badge);
+        });
+        provSection.appendChild(provList);
+        body.appendChild(provSection);
+    }
+
+    // Add to List section
+    const alreadyInAnyList = ['movie', 'tv', 'anime'].some(t => state.lists[t].some(i => i.tmdbId === tmdbResult.id));
+    const addSection = el('div', { className: 'preview-add-section' });
+    const addInfo = el('div', { className: 'preview-add-info' }, [
+        el('span', { className: 'preview-add-info-title', textContent: alreadyInAnyList ? 'Già nella tua lista ✓' : 'Vuoi aggiungerlo alla lista?' }),
+        el('span', { className: 'preview-add-info-sub', textContent: alreadyInAnyList ? 'Questo titolo è già presente' : `Verrà aggiunto come "${getTabLabel(tab)}"` }),
+    ]);
+    addSection.appendChild(addInfo);
+
+    if (!alreadyInAnyList) {
+        const addBtn = el('button', {
+            className: 'preview-add-btn',
+            innerHTML: '+ Aggiungi alla lista',
+            onClick: async () => {
+                // Determine the correct tab for adding
+                let addTab = tab;
+                if (state.currentTab !== 'catalog') addTab = state.currentTab;
+
+                // Build the item using the tmdbResult + fetched details
+                const itemGenres = genres;
+                const item = {
+                    tmdbId: tmdbResult.id,
+                    mediaType: addTab === 'anime' ? 'tv' : addTab,
+                    title: tmdbResult.title || tmdbResult.name || '',
+                    posterPath: tmdbResult.poster_path || null,
+                    backdropPath: backdropPath || null,
+                    overview: overview,
+                    genres: itemGenres,
+                    providers: providers || [],
+                    releaseDate: tmdbResult.release_date || tmdbResult.first_air_date || '',
+                    voteAverage: tmdbResult.vote_average || 0,
+                    status: 'to_watch',
+                    ratings: {},
+                    notes: '',
+                    addedBy: state.currentProfile,
+                    addedAt: new Date().toISOString(),
+                };
+
+                if (!state.lists[addTab].some(i => i.tmdbId === tmdbResult.id)) {
+                    state.lists[addTab].push(item);
+                    saveState();
+                    renderHero();
+                    renderContent();
+                }
+
+                addBtn.className = 'preview-add-btn added';
+                addBtn.innerHTML = '✓ Aggiunto!';
+                showToast(`${item.title} aggiunto! 🎉`);
+            },
+        });
+        addSection.appendChild(addBtn);
+    }
+
+    body.appendChild(addSection);
+    container.appendChild(body);
+}
+
+// ──────────────────────────────────────────────────────────────
+// CATALOG PAGE
+// ──────────────────────────────────────────────────────────────
+let catalogScrollHandler = null;
+
+async function initCatalog() {
+    // Load genres if not already loaded
+    if (state.catalog.genres.movie.length === 0) {
+        const [movieGenres, tvGenres] = await Promise.all([
+            TMDB.getGenreList('movie'),
+            TMDB.getGenreList('tv'),
+        ]);
+        state.catalog.genres.movie = movieGenres;
+        state.catalog.genres.tv = tvGenres;
+    }
+
+    renderCatalogFilters();
+    state.catalog.page = 1;
+    state.catalog.results = [];
+    await loadCatalogPage(1);
+    setupCatalogScroll();
+}
+
+function renderCatalogFilters() {
+    const container = $('#catalog-filters');
+    container.innerHTML = '';
+
+    const filters = state.catalog.filters;
+
+    // Type filter
+    const typeGroup = el('div', { className: 'catalog-filter-group' }, [
+        el('label', { className: 'catalog-filter-label', textContent: 'Tipologia' }),
+    ]);
+    const typeSelect = el('select', {
+        className: 'catalog-filter-select',
+        onChange: (e) => {
+            filters.type = e.target.value;
+            filters.genre = ''; // reset genre when type changes
+            renderCatalogFilters();
+            resetAndLoadCatalog();
+        },
+    }, [
+        el('option', { value: 'movie', textContent: '🎬 Film', ...(filters.type === 'movie' ? { selected: '' } : {}) }),
+        el('option', { value: 'tv', textContent: '📺 Serie TV', ...(filters.type === 'tv' ? { selected: '' } : {}) }),
+    ]);
+    typeSelect.value = filters.type;
+    typeGroup.appendChild(typeSelect);
+    container.appendChild(typeGroup);
+
+    // Genre filter
+    const genreGroup = el('div', { className: 'catalog-filter-group' }, [
+        el('label', { className: 'catalog-filter-label', textContent: 'Genere' }),
+    ]);
+    const genres = state.catalog.genres[filters.type] || [];
+    const genreSelect = el('select', {
+        className: 'catalog-filter-select',
+        onChange: (e) => { filters.genre = e.target.value; resetAndLoadCatalog(); },
+    }, [
+        el('option', { value: '', textContent: 'Tutti i generi' }),
+        ...genres.map(g => el('option', { value: String(g.id), textContent: g.name, ...(filters.genre === String(g.id) ? { selected: '' } : {}) })),
+    ]);
+    genreSelect.value = filters.genre;
+    genreGroup.appendChild(genreSelect);
+    container.appendChild(genreGroup);
+
+    // Year filter
+    const yearGroup = el('div', { className: 'catalog-filter-group' }, [
+        el('label', { className: 'catalog-filter-label', textContent: 'Anno' }),
+    ]);
+    const currentYear = new Date().getFullYear();
+    const yearOptions = [el('option', { value: '', textContent: 'Tutti gli anni' })];
+    for (let y = currentYear; y >= 1990; y--) {
+        yearOptions.push(el('option', { value: String(y), textContent: String(y), ...(filters.year === String(y) ? { selected: '' } : {}) }));
+    }
+    yearOptions.push(el('option', { value: '1980', textContent: 'Anni \'80', ...(filters.year === '1980' ? { selected: '' } : {}) }));
+    yearOptions.push(el('option', { value: '1970', textContent: 'Classici (pre-1980)', ...(filters.year === '1970' ? { selected: '' } : {}) }));
+    const yearSelect = el('select', {
+        className: 'catalog-filter-select',
+        onChange: (e) => { filters.year = e.target.value; resetAndLoadCatalog(); },
+    }, yearOptions);
+    yearSelect.value = filters.year;
+    yearGroup.appendChild(yearSelect);
+    container.appendChild(yearGroup);
+
+    // Rating filter
+    const ratingGroup = el('div', { className: 'catalog-filter-group' }, [
+        el('label', { className: 'catalog-filter-label', textContent: 'Valutazione min.' }),
+    ]);
+    const ratingSelect = el('select', {
+        className: 'catalog-filter-select',
+        onChange: (e) => { filters.rating = e.target.value; resetAndLoadCatalog(); },
+    }, [
+        el('option', { value: '', textContent: 'Qualsiasi' }),
+        el('option', { value: '8', textContent: '⭐ 8+ Eccellente', ...(filters.rating === '8' ? { selected: '' } : {}) }),
+        el('option', { value: '7', textContent: '⭐ 7+ Molto buono', ...(filters.rating === '7' ? { selected: '' } : {}) }),
+        el('option', { value: '6', textContent: '⭐ 6+ Buono', ...(filters.rating === '6' ? { selected: '' } : {}) }),
+        el('option', { value: '5', textContent: '⭐ 5+ Discreto', ...(filters.rating === '5' ? { selected: '' } : {}) }),
+    ]);
+    ratingSelect.value = filters.rating;
+    ratingGroup.appendChild(ratingSelect);
+    container.appendChild(ratingGroup);
+
+    // Duration filter (only for movies)
+    if (filters.type === 'movie') {
+        const durationGroup = el('div', { className: 'catalog-filter-group' }, [
+            el('label', { className: 'catalog-filter-label', textContent: 'Durata' }),
+        ]);
+        const durationSelect = el('select', {
+            className: 'catalog-filter-select',
+            onChange: (e) => { filters.duration = e.target.value; resetAndLoadCatalog(); },
+        }, [
+            el('option', { value: '', textContent: 'Qualsiasi' }),
+            el('option', { value: '90', textContent: '< 90 min', ...(filters.duration === '90' ? { selected: '' } : {}) }),
+            el('option', { value: '90-120', textContent: '90-120 min', ...(filters.duration === '90-120' ? { selected: '' } : {}) }),
+            el('option', { value: '120', textContent: '> 120 min', ...(filters.duration === '120' ? { selected: '' } : {}) }),
+        ]);
+        durationSelect.value = filters.duration;
+        durationGroup.appendChild(durationSelect);
+        container.appendChild(durationGroup);
+    }
+
+    // Reset button
+    container.appendChild(el('button', {
+        className: 'catalog-filter-btn secondary',
+        textContent: '↺ Reset',
+        onClick: () => {
+            state.catalog.filters = { type: 'movie', genre: '', year: '', rating: '', duration: '' };
+            renderCatalogFilters();
+            resetAndLoadCatalog();
+        },
+    }));
+}
+
+async function resetAndLoadCatalog() {
+    state.catalog.page = 1;
+    state.catalog.results = [];
+    $('#catalog-grid').innerHTML = '';
+    $('#catalog-end').classList.add('hidden');
+    await loadCatalogPage(1);
+}
+
+async function loadCatalogPage(page) {
+    if (state.catalog.loading) return;
+    state.catalog.loading = true;
+
+    const loader = $('#catalog-loader');
+    loader.classList.remove('hidden');
+
+    const filters = state.catalog.filters;
+    const params = {
+        page: String(page),
+        sort_by: 'popularity.desc',
+    };
+
+    if (filters.genre) params.with_genres = filters.genre;
+    if (filters.rating) params['vote_average.gte'] = filters.rating;
+
+    if (filters.year) {
+        const y = parseInt(filters.year);
+        if (y >= 1990) {
+            if (filters.type === 'movie') {
+                params.primary_release_year = filters.year;
+            } else {
+                params.first_air_date_year = filters.year;
+            }
+        } else if (y === 1980) {
+            if (filters.type === 'movie') {
+                params['primary_release_date.gte'] = '1980-01-01';
+                params['primary_release_date.lte'] = '1989-12-31';
+            } else {
+                params['first_air_date.gte'] = '1980-01-01';
+                params['first_air_date.lte'] = '1989-12-31';
+            }
+        } else {
+            if (filters.type === 'movie') {
+                params['primary_release_date.lte'] = '1979-12-31';
+            } else {
+                params['first_air_date.lte'] = '1979-12-31';
+            }
+        }
+    }
+
+    if (filters.duration && filters.type === 'movie') {
+        if (filters.duration === '90') {
+            params['with_runtime.lte'] = '90';
+        } else if (filters.duration === '90-120') {
+            params['with_runtime.gte'] = '90';
+            params['with_runtime.lte'] = '120';
+        } else if (filters.duration === '120') {
+            params['with_runtime.gte'] = '120';
+        }
+    }
+
+    const data = await TMDB.discover(filters.type, params);
+
+    loader.classList.add('hidden');
+    state.catalog.loading = false;
+
+    if (!data || !data.results) return;
+
+    state.catalog.page = page;
+    state.catalog.totalPages = data.total_pages || 1;
+    state.catalog.results = [...state.catalog.results, ...data.results];
+
+    renderCatalogResults(data.results, page === 1);
+
+    if (page >= state.catalog.totalPages) {
+        $('#catalog-end').classList.remove('hidden');
+    }
+}
+
+function renderCatalogResults(results, clear = false) {
+    const grid = $('#catalog-grid');
+    if (clear) grid.innerHTML = '';
+
+    if (results.length === 0 && clear) {
+        grid.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px;">
+                <div style="font-size: 3rem; margin-bottom: 16px;">🔍</div>
+                <p style="color: var(--text-muted);">Nessun risultato trovato. Prova a cambiare i filtri.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const filters = state.catalog.filters;
+
+    results.forEach(result => {
+        const title = result.title || result.name || '';
+        const year = getYear(result);
+        const rating = result.vote_average ? result.vote_average.toFixed(1) : '';
+        const posterUrl = TMDB.imgUrl(result.poster_path, 'w342');
+        const alreadyInList = ['movie', 'tv', 'anime'].some(t => state.lists[t].some(i => i.tmdbId === result.id));
+
+        const card = el('div', {
+            className: 'catalog-card',
+            onClick: () => openSearchPreview(result),
+        });
+
+        // Poster
+        if (posterUrl) {
+            card.appendChild(el('img', {
+                className: 'catalog-card-poster',
+                src: posterUrl,
+                alt: title,
+                loading: 'lazy',
+            }));
+        } else {
+            card.appendChild(el('div', {
+                className: 'catalog-card-no-poster',
+                textContent: filters.type === 'tv' ? '📺' : '🎬',
+            }));
+        }
+
+        // Type badge
+        card.appendChild(el('div', {
+            className: 'catalog-card-badge',
+            textContent: filters.type === 'tv' ? 'Serie' : 'Film',
+        }));
+
+        // In-list badge or add button
+        if (alreadyInList) {
+            card.appendChild(el('div', { className: 'catalog-card-in-list', textContent: '✓' }));
+        } else {
+            const addBtn = el('button', {
+                className: 'catalog-card-add',
+                textContent: '+',
+                title: 'Aggiungi alla lista',
+                onClick: (e) => {
+                    e.stopPropagation();
+                    addToList(result);
+                    addBtn.replaceWith(el('div', { className: 'catalog-card-in-list', textContent: '✓' }));
+                },
+            });
+            card.appendChild(addBtn);
+        }
+
+        // Hover overlay
+        card.appendChild(el('div', { className: 'catalog-card-overlay' }, [
+            el('div', { className: 'catalog-card-title', textContent: title }),
+            el('div', { className: 'catalog-card-meta' }, [
+                ...(rating ? [el('span', { className: 'catalog-card-rating', textContent: `⭐ ${rating}` })] : []),
+                ...(year ? [el('span', { textContent: year })] : []),
+            ]),
+        ]));
+
+        grid.appendChild(card);
+    });
+}
+
+function setupCatalogScroll() {
+    // Remove old handler if exists
+    if (catalogScrollHandler) {
+        window.removeEventListener('scroll', catalogScrollHandler);
+    }
+
+    catalogScrollHandler = () => {
+        if (state.currentTab !== 'catalog') return;
+        if (state.catalog.loading) return;
+        if (state.catalog.page >= state.catalog.totalPages) return;
+
+        const scrollBottom = window.innerHeight + window.scrollY;
+        const docHeight = document.documentElement.scrollHeight;
+
+        if (scrollBottom >= docHeight - 600) {
+            loadCatalogPage(state.catalog.page + 1);
+        }
+    };
+
+    window.addEventListener('scroll', catalogScrollHandler, { passive: true });
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1425,7 +1988,7 @@ function setupEventListeners() {
     // Close modals on Escape
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            ['search-modal', 'detail-modal', 'profile-edit-modal'].forEach(id => {
+            ['search-modal', 'detail-modal', 'search-preview-modal', 'profile-edit-modal'].forEach(id => {
                 if (!$(`#${id}`).classList.contains('hidden')) {
                     closeModal(id);
                 }

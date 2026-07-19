@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DiVanoLetto — Le nostre liste</title>
+    <title>DivanoLetto</title>
     <meta name="description" content="Liste condivise di film, serie TV e anime per due">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛋️</text></svg>">
+    <link rel="icon" href="pubblic/logo.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -16,8 +16,8 @@
     <!-- ============ Login Screen ============ -->
     <div id="login-screen" class="screen">
         <div class="setup-container">
-            <div class="setup-logo">🛋️</div>
-            <h1 class="setup-title">DiVanoLetto</h1>
+            <div class="setup-logo"><img src="pubblic/logo.svg" alt="DivanoLetto" class="setup-logo-img"></div>
+            <h1 class="setup-title">DivanoLetto</h1>
             <p class="setup-subtitle" id="login-subtitle">Inserisci la password per accedere</p>
             <div class="setup-input-group">
                 <input type="password" id="password-input" placeholder="Password..." autocomplete="current-password">
@@ -42,13 +42,14 @@
         <header id="main-header">
             <div class="header-left">
                 <h1 class="logo" id="logo-home">
-                    <span class="logo-emoji">🛋️</span>
-                    <span class="logo-text">DiVanoLetto</span>
+                    <img src="pubblic/logo.svg" alt="DivanoLetto" class="logo-img">
+                    <span class="logo-text">DivanoLetto</span>
                 </h1>
                 <nav class="nav-tabs" id="nav-tabs">
                     <button class="nav-tab active" data-tab="movie">🎬 Film</button>
                     <button class="nav-tab" data-tab="tv">📺 Serie TV</button>
                     <button class="nav-tab" data-tab="anime">🎌 Anime</button>
+                    <button class="nav-tab" data-tab="catalog">📚 Catalogo</button>
                 </nav>
             </div>
             <div class="header-right">
@@ -66,6 +67,7 @@
             <button class="nav-tab active" data-tab="movie">🎬 Film</button>
             <button class="nav-tab" data-tab="tv">📺 Serie TV</button>
             <button class="nav-tab" data-tab="anime">🎌 Anime</button>
+            <button class="nav-tab" data-tab="catalog">📚 Catalogo</button>
         </nav>
 
         <!-- Hero Banner -->
@@ -73,6 +75,23 @@
 
         <!-- Content Rows -->
         <main id="main-content"></main>
+
+        <!-- Catalog Page -->
+        <section id="catalog-page" class="hidden">
+            <div class="catalog-header">
+                <h2 class="catalog-title">📚 Esplora il Catalogo</h2>
+                <p class="catalog-subtitle">Scopri film, serie TV e anime da aggiungere alla tua lista</p>
+            </div>
+            <div class="catalog-filters" id="catalog-filters"></div>
+            <div class="catalog-grid" id="catalog-grid"></div>
+            <div class="catalog-loader hidden" id="catalog-loader">
+                <div class="loading-spinner"></div>
+                <p>Caricamento...</p>
+            </div>
+            <div class="catalog-end hidden" id="catalog-end">
+                <p>Hai raggiunto la fine dei risultati</p>
+            </div>
+        </section>
 
         <!-- FAB -->
         <button id="fab-add" class="fab" title="Cerca e aggiungi">
@@ -106,6 +125,15 @@
         <div class="modal-content modal-detail">
             <button class="btn-close detail-close" data-close="detail-modal">✕</button>
             <div id="detail-content"></div>
+        </div>
+    </div>
+
+    <!-- ============ Search Preview Modal ============ -->
+    <div id="search-preview-modal" class="modal hidden">
+        <div class="modal-overlay" data-close="search-preview-modal"></div>
+        <div class="modal-content modal-detail modal-preview">
+            <button class="btn-close detail-close" data-close="search-preview-modal">✕</button>
+            <div id="search-preview-content"></div>
         </div>
     </div>
 
