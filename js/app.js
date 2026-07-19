@@ -1857,6 +1857,7 @@ function renderCatalogFilters() {
     }, [
         el('option', { value: 'movie', textContent: '🎬 Film', ...(filters.type === 'movie' ? { selected: '' } : {}) }),
         el('option', { value: 'tv', textContent: '📺 Serie TV', ...(filters.type === 'tv' ? { selected: '' } : {}) }),
+        el('option', { value: 'anime', textContent: '🎌 Anime', ...(filters.type === 'anime' ? { selected: '' } : {}) }),
     ]);
     typeSelect.value = filters.type;
     typeGroup.appendChild(typeSelect);
@@ -1866,7 +1867,8 @@ function renderCatalogFilters() {
     const genreGroup = el('div', { className: 'catalog-filter-group' }, [
         el('label', { className: 'catalog-filter-label', textContent: 'Genere' }),
     ]);
-    const genres = state.catalog.genres[filters.type] || [];
+    const genreType = filters.type === 'anime' ? 'tv' : filters.type;
+    const genres = state.catalog.genres[genreType] || [];
     const genreSelect = el('select', {
         className: 'catalog-filter-select',
         onChange: (e) => { filters.genre = e.target.value; resetAndLoadCatalog(); },
@@ -1967,31 +1969,27 @@ async function loadCatalogPage(page) {
         sort_by: 'popularity.desc',
     };
 
-    if (filters.genre) params.with_genres = filters.genre;
+    let discoverType = filters.type;
+    if (filters.type === 'anime') {
+        discoverType = 'tv';
+        params.with_original_language = 'ja';
+        params.with_genres = filters.genre ? `${filters.genre},16` : '16';
+    } else {
+        if (filters.genre) params.with_genres = filters.genre;
+    }
+
     if (filters.rating) params['vote_average.gte'] = filters.rating;
 
     if (filters.year) {
         const y = parseInt(filters.year);
+        const dateType = discoverType === 'movie' ? 'primary_release' : 'first_air';
         if (y >= 1990) {
-            if (filters.type === 'movie') {
-                params.primary_release_year = filters.year;
-            } else {
-                params.first_air_date_year = filters.year;
-            }
+            params[`${dateType}_year`] = filters.year;
         } else if (y === 1980) {
-            if (filters.type === 'movie') {
-                params['primary_release_date.gte'] = '1980-01-01';
-                params['primary_release_date.lte'] = '1989-12-31';
-            } else {
-                params['first_air_date.gte'] = '1980-01-01';
-                params['first_air_date.lte'] = '1989-12-31';
-            }
+            params[`${dateType}_date.gte`] = '1980-01-01';
+            params[`${dateType}_date.lte`] = '1989-12-31';
         } else {
-            if (filters.type === 'movie') {
-                params['primary_release_date.lte'] = '1979-12-31';
-            } else {
-                params['first_air_date.lte'] = '1979-12-31';
-            }
+            params[`${dateType}_date.lte`] = '1979-12-31';
         }
     }
 
@@ -2006,7 +2004,7 @@ async function loadCatalogPage(page) {
         }
     }
 
-    const data = await TMDB.discover(filters.type, params);
+    const data = await TMDB.discover(discoverType, params);
 
     loader.classList.add('hidden');
     state.catalog.loading = false;

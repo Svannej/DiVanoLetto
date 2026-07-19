@@ -2294,26 +2294,29 @@ img {
 }
 
 .hero-slides {
-    position: relative;
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
 }
 
 .hero-slide {
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.8s ease-in-out, visibility 0.8s ease-in-out;
+    display: flex;
+    align-items: flex-end;
+    padding: 0 var(--side-padding);
+    padding-bottom: 60px;
 }
 
 .hero-slide.active {
     opacity: 1;
     visibility: visible;
-    position: relative; /* So the parent #hero can size itself if not fixed height */
 }
 
 .hero-dots {
