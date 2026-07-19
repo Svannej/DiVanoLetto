@@ -51,7 +51,7 @@
     /* Z-index layers */
     --z-header: 100;
     --z-fab: 90;
-    --z-modal: 200;
+    --z-modal: 600;
     --z-toast: 300;
 }
 
@@ -873,6 +873,29 @@ img {
     filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
 }
 
+.card-providers {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    z-index: 5;
+}
+
+.card-provider-logo {
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    object-fit: cover;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+.card-added-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
 /* Empty row state */
 .row-empty {
     display: flex;
@@ -1266,7 +1289,58 @@ img {
     color: var(--text-secondary);
     font-size: 0.95rem;
     line-height: 1.7;
-    margin-bottom: 28px;
+    margin-bottom: 20px;
+}
+
+/* Watch Providers */
+.detail-providers {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: var(--bg-elevated);
+    border-radius: 10px;
+}
+
+.detail-providers-label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.detail-providers-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.provider-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 6px 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: all var(--transition-fast);
+}
+
+.provider-badge:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.provider-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.provider-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-primary);
 }
 
 .detail-divider {

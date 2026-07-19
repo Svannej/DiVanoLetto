@@ -145,6 +145,35 @@ const TMDB = {
         return await this._fetch(`/${mediaType}/${id}`);
     },
 
+    async getWatchProviders(id, type) {
+        const mediaType = type === 'anime' ? 'tv' : type;
+        const data = await this._fetch(`/${mediaType}/${id}/watch/providers`);
+        if (!data || !data.results || !data.results.IT) return [];
+        const it = data.results.IT;
+        const providers = [];
+        // Subscription streaming services
+        if (it.flatrate) {
+            it.flatrate.forEach(p => providers.push({
+                name: p.provider_name,
+                logo: p.logo_path,
+                type: 'streaming',
+            }));
+        }
+        // Free with ads
+        if (it.ads) {
+            it.ads.forEach(p => {
+                if (!providers.some(x => x.name === p.provider_name)) {
+                    providers.push({
+                        name: p.provider_name,
+                        logo: p.logo_path,
+                        type: 'ads',
+                    });
+                }
+            });
+        }
+        return providers;
+    },
+
     imgUrl(path, size = 'w342') {
         if (!path) return null;
         return `${CONFIG.TMDB_IMG}${size}${path}`;
@@ -152,33 +181,89 @@ const TMDB = {
 };
 
 // ──────────────────────────────────────────────────────────────
-// PERSISTENCE (localStorage)
+// PERSISTENCE (Supabase + localStorage fallback)
 // ──────────────────────────────────────────────────────────────
-function saveState() {
+const supabaseUrl = 'https://okokzbyhgsuukdlyrwsc.supabase.co';
+const supabaseKey = 'sb_publishable_g9QdKH-8OYZTjRx6EdImaA_iKN1zcjW';
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+async function saveState() {
+    // Backup locally
     localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify({
         profiles: state.profiles,
         lists: state.lists,
     }));
+
+    // Save to Supabase
+    try {
+        await supabase.from('app_state').upsert({
+            id: 1,
+            data: { profiles: state.profiles, lists: state.lists }
+        });
+    } catch (e) {
+        console.error('Error saving to Supabase:', e);
+    }
 }
 
-function loadState() {
+async function loadState() {
+    // Local device specific
     const profileIdx = localStorage.getItem(CONFIG.STORAGE_KEY_PROFILE);
     if (profileIdx !== null) state.currentProfile = parseInt(profileIdx, 10);
 
-    const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
-    if (saved) {
-        try {
-            const data = JSON.parse(saved);
-            if (data.profiles) state.profiles = data.profiles;
-            if (data.lists) {
-                state.lists.movie = data.lists.movie || [];
-                state.lists.tv = data.lists.tv || [];
-                state.lists.anime = data.lists.anime || [];
+    // Fetch from Supabase
+    try {
+        const { data, error } = await supabase.from('app_state').select('data').eq('id', 1).single();
+        if (!error && data && data.data) {
+            const remoteData = data.data;
+            if (remoteData.profiles) state.profiles = remoteData.profiles;
+            if (remoteData.lists) {
+                state.lists.movie = remoteData.lists.movie || [];
+                state.lists.tv = remoteData.lists.tv || [];
+                state.lists.anime = remoteData.lists.anime || [];
             }
-        } catch (e) {
-            console.error('Failed to parse saved state:', e);
+        }
+    } catch (e) {
+        console.error('Supabase load error:', e);
+        // Fallback to local
+        const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
+        if (saved) {
+            try {
+                const localData = JSON.parse(saved);
+                if (localData.profiles) state.profiles = localData.profiles;
+                if (localData.lists) {
+                    state.lists.movie = localData.lists.movie || [];
+                    state.lists.tv = localData.lists.tv || [];
+                    state.lists.anime = localData.lists.anime || [];
+                }
+            } catch (err) {}
         }
     }
+
+    // Subscribe to realtime changes
+    supabase.channel('public:app_state')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_state' }, payload => {
+            const newData = payload.new.data;
+            if (newData.profiles) state.profiles = newData.profiles;
+            if (newData.lists) {
+                state.lists.movie = newData.lists.movie || [];
+                state.lists.tv = newData.lists.tv || [];
+                state.lists.anime = newData.lists.anime || [];
+            }
+            
+            // Re-render UI
+            if (!$('#app').classList.contains('hidden')) {
+                renderHeader();
+                renderHero();
+                renderContent();
+            }
+            if (!$('#profile-screen').classList.contains('hidden')) {
+                showProfileScreen();
+            }
+            if (!$('#profile-edit-modal').classList.contains('hidden')) {
+                renderProfileEditContent();
+            }
+        })
+        .subscribe();
 }
 
 function saveCurrentProfile(index) {
@@ -596,15 +681,36 @@ function renderCard(item) {
         }));
     }
 
+    // Provider badges (show first 2)
+    if (item.providers && item.providers.length > 0) {
+        const provBadges = el('div', { className: 'card-providers' });
+        item.providers.slice(0, 2).forEach(p => {
+            const logoUrl = TMDB.imgUrl(p.logo, 'w92');
+            if (logoUrl) {
+                provBadges.appendChild(el('img', {
+                    className: 'card-provider-logo',
+                    src: logoUrl,
+                    alt: p.name,
+                    title: p.name,
+                }));
+            }
+        });
+        card.appendChild(provBadges);
+    }
+
     // Hover overlay
     const year = getYear(item);
     const ratingText = item.voteAverage ? `⭐ ${item.voteAverage.toFixed(1)}` : '';
+    const addedByProfile = state.profiles[item.addedBy];
     const overlay = el('div', { className: 'card-overlay' }, [
         el('div', { className: 'card-title', textContent: item.title }),
         el('div', { className: 'card-meta' }, [
             ...(ratingText ? [el('span', { className: 'card-rating', textContent: ratingText })] : []),
             ...(year ? [el('span', { textContent: year })] : []),
         ]),
+        ...(addedByProfile ? [
+            el('div', { className: 'card-added-label', textContent: `${addedByProfile.emoji} ${addedByProfile.name}` }),
+        ] : []),
     ]);
     card.appendChild(overlay);
 
@@ -820,6 +926,30 @@ function renderDetailContent(item) {
     // Overview
     if (item.overview) {
         body.appendChild(el('p', { className: 'detail-overview', textContent: item.overview }));
+    }
+
+    // Watch Providers
+    if (item.providers && item.providers.length > 0) {
+        const provSection = el('div', { className: 'detail-providers' });
+        provSection.appendChild(el('span', {
+            className: 'detail-providers-label',
+            textContent: '📺 Disponibile su',
+        }));
+        const provList = el('div', { className: 'detail-providers-list' });
+        item.providers.forEach(p => {
+            const logoUrl = TMDB.imgUrl(p.logo, 'w92');
+            const badge = el('div', { className: 'provider-badge' }, [
+                ...(logoUrl ? [el('img', {
+                    className: 'provider-logo',
+                    src: logoUrl,
+                    alt: p.name,
+                })] : []),
+                el('span', { className: 'provider-name', textContent: p.name }),
+            ]);
+            provList.appendChild(badge);
+        });
+        provSection.appendChild(provList);
+        body.appendChild(provSection);
     }
 
     body.appendChild(el('hr', { className: 'detail-divider' }));
@@ -1145,8 +1275,11 @@ async function addToList(tmdbResult) {
         return;
     }
 
-    // Fetch full details for genres
-    const details = await TMDB.getDetails(tmdbId, tab);
+    // Fetch full details for genres + watch providers in parallel
+    const [details, providers] = await Promise.all([
+        TMDB.getDetails(tmdbId, tab),
+        TMDB.getWatchProviders(tmdbId, tab),
+    ]);
     const genres = details && details.genres ? details.genres.map(g => g.name) : [];
 
     const item = {
@@ -1157,6 +1290,7 @@ async function addToList(tmdbResult) {
         backdropPath: tmdbResult.backdrop_path || null,
         overview: tmdbResult.overview || '',
         genres,
+        providers,
         releaseDate: tmdbResult.release_date || tmdbResult.first_air_date || '',
         voteAverage: tmdbResult.vote_average || 0,
         status: 'to_watch',
@@ -1289,8 +1423,8 @@ function setupEventListeners() {
 // ──────────────────────────────────────────────────────────────
 // INITIALIZATION
 // ──────────────────────────────────────────────────────────────
-function init() {
-    loadState();
+async function init() {
+    await loadState();
     setupEventListeners();
 
     if (!isLoggedIn()) {
