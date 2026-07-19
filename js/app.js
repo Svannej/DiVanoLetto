@@ -18,12 +18,15 @@ const CONFIG = {
     TMDB_API_KEY: 'e4982dd5be0f6d31838c58597c9c345f',
     TMDB_BASE: 'https://api.themoviedb.org/3',
     TMDB_IMG: 'https://image.tmdb.org/t/p/',
+    OMDB_API_KEY: '4a8ee498',
+    OMDB_BASE: 'https://www.omdbapi.com/',
     APP_PASSWORD: 'divanoletto',
     STORAGE_KEY: 'divanoLetto_data',
     STORAGE_KEY_PROFILE: 'divanoLetto_currentProfile',
     SESSION_KEY: 'divanoLetto_session',
     DEBOUNCE_MS: 400,
-    MAX_IMG_SIZE: 200, // max width/height in px for profile images (to keep localStorage small)
+    HERO_INTERVAL_MS: 4000,
+    MAX_IMG_SIZE: 200,
     EMOJI_OPTIONS: ['😎', '💖', '🦊', '🐱', '👑', '🌸', '🎮', '🎵', '🌙', '⭐', '🔥', '🎭', '🦄', '🐼', '🌺', '💜', '🍕', '🎬', '🧸', '🌈', '🐉', '🦋', '🍿', '🎧'],
 };
 
@@ -221,6 +224,49 @@ const TMDB = {
     imgUrl(path, size = 'w342') {
         if (!path) return null;
         return `${CONFIG.TMDB_IMG}${size}${path}`;
+    },
+
+    // Get IMDb ID from TMDb
+    async getExternalIds(id, type) {
+        const mediaType = type === 'anime' ? 'tv' : type;
+        return await this._fetch(`/${mediaType}/${id}/external_ids`);
+    },
+};
+
+// ──────────────────────────────────────────────────────────────
+// OMDb API (for IMDb + Rotten Tomatoes ratings)
+// ──────────────────────────────────────────────────────────────
+const OMDB = {
+    async getByImdbId(imdbId) {
+        if (!imdbId) return null;
+        try {
+            const url = `${CONFIG.OMDB_BASE}?apikey=${CONFIG.OMDB_API_KEY}&i=${imdbId}&plot=short`;
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data.Response === 'False') return null;
+            return data;
+        } catch (e) {
+            console.error('OMDb fetch error:', e);
+            return null;
+        }
+    },
+
+    parseRatings(omdbData) {
+        if (!omdbData) return {};
+        const result = {};
+        // IMDb rating
+        if (omdbData.imdbRating && omdbData.imdbRating !== 'N/A') {
+            result.imdb = { score: omdbData.imdbRating, votes: omdbData.imdbVotes || '' };
+        }
+        // Rotten Tomatoes
+        if (omdbData.Ratings) {
+            const rt = omdbData.Ratings.find(r => r.Source === 'Rotten Tomatoes');
+            if (rt) result.rottenTomatoes = { score: rt.Value };
+            const mc = omdbData.Ratings.find(r => r.Source === 'Metacritic');
+            if (mc) result.metacritic = { score: mc.Value };
+        }
+        return result;
     },
 };
 
@@ -569,15 +615,27 @@ function renderHeader() {
 }
 
 // ──────────────────────────────────────────────────────────────
-// RENDERING — HERO BANNER
+// RENDERING — HERO BANNER (CAROUSEL)
 // ──────────────────────────────────────────────────────────────
+let heroCarouselTimer = null;
+let heroCarouselIndex = 0;
+let heroCarouselItems = [];
+
+function cleanupHeroCarousel() {
+    if (heroCarouselTimer) {
+        clearInterval(heroCarouselTimer);
+        heroCarouselTimer = null;
+    }
+}
+
 function renderHero() {
+    cleanupHeroCarousel();
     const hero = $('#hero');
     const list = state.lists[state.currentTab];
+    if (!list) return;
     const toWatch = list.filter(i => i.status === 'to_watch');
 
     if (toWatch.length === 0) {
-        // Empty hero
         hero.innerHTML = '';
         const gradBg = el('div', { className: 'hero-gradient-bg' });
         const content = el('div', { className: 'hero-empty' }, [
@@ -590,53 +648,115 @@ function renderHero() {
         return;
     }
 
-    // Pick a random item for the hero
-    const heroItem = toWatch[Math.floor(Math.random() * toWatch.length)];
-    const backdropUrl = TMDB.imgUrl(heroItem.backdropPath, 'w1280');
+    // Select up to 5 items for the carousel, shuffle
+    const shuffled = [...toWatch].sort(() => Math.random() - 0.5);
+    heroCarouselItems = shuffled.slice(0, Math.min(5, shuffled.length));
+    heroCarouselIndex = 0;
 
     hero.innerHTML = '';
+    hero.classList.add('hero-carousel');
+
+    // Build all slides
+    const slidesContainer = el('div', { className: 'hero-slides' });
+    heroCarouselItems.forEach((item, i) => {
+        const slide = buildHeroSlide(item);
+        slide.classList.toggle('active', i === 0);
+        slide.dataset.index = i;
+        slidesContainer.appendChild(slide);
+    });
+    hero.appendChild(slidesContainer);
+
+    // Dots navigation
+    if (heroCarouselItems.length > 1) {
+        const dotsWrap = el('div', { className: 'hero-dots' });
+        heroCarouselItems.forEach((_, i) => {
+            const dot = el('button', {
+                className: `hero-dot ${i === 0 ? 'active' : ''}`,
+                onClick: () => goToHeroSlide(i),
+            });
+            dotsWrap.appendChild(dot);
+        });
+        hero.appendChild(dotsWrap);
+
+        // Start auto-rotation
+        heroCarouselTimer = setInterval(() => {
+            const next = (heroCarouselIndex + 1) % heroCarouselItems.length;
+            goToHeroSlide(next);
+        }, CONFIG.HERO_INTERVAL_MS);
+    }
+}
+
+function buildHeroSlide(item) {
+    const slide = el('div', { className: 'hero-slide' });
 
     // Backdrop
     const backdrop = el('div', { className: 'hero-backdrop' });
+    const backdropUrl = TMDB.imgUrl(item.backdropPath, 'w1280');
     if (backdropUrl) {
         backdrop.style.backgroundImage = `url(${backdropUrl})`;
     } else {
         backdrop.innerHTML = '<div class="hero-gradient-bg"></div>';
     }
-    hero.appendChild(backdrop);
+    slide.appendChild(backdrop);
 
     // Content
-    const genres = heroItem.genres ? heroItem.genres.join(', ') : '';
+    const genres = item.genres ? item.genres.join(', ') : '';
     const content = el('div', { className: 'hero-content' }, [
         el('div', { className: 'hero-badge', textContent: `${getStatusEmoji('to_watch')} Da vedere` }),
-        el('h2', { className: 'hero-title', textContent: heroItem.title }),
-        ...(heroItem.voteAverage ? [
+        el('h2', { className: 'hero-title', textContent: item.title }),
+        ...(item.voteAverage ? [
             el('div', { className: 'hero-meta' }, [
-                el('span', { className: 'hero-rating', innerHTML: `⭐ ${heroItem.voteAverage.toFixed(1)}` }),
-                el('span', { className: 'hero-year', textContent: getYear(heroItem) }),
+                el('span', { className: 'hero-rating', innerHTML: `⭐ ${item.voteAverage.toFixed(1)}` }),
+                el('span', { className: 'hero-year', textContent: getYear(item) }),
                 ...(genres ? [el('span', { className: 'hero-genres', textContent: genres })] : []),
             ]),
         ] : []),
-        ...(heroItem.overview ? [
-            el('p', { className: 'hero-overview', textContent: heroItem.overview }),
+        ...(item.overview ? [
+            el('p', { className: 'hero-overview', textContent: item.overview }),
         ] : []),
         el('div', { className: 'hero-actions' }, [
             el('button', {
                 className: 'btn btn-primary',
                 textContent: 'ℹ️ Dettagli',
-                onClick: () => openDetailModal(heroItem),
+                onClick: () => openDetailModal(item),
             }),
             el('button', {
                 className: 'btn btn-secondary',
                 textContent: '▶️ In corso',
                 onClick: () => {
-                    updateItemStatus(heroItem.tmdbId, 'watching');
+                    updateItemStatus(item.tmdbId, 'watching');
                     showToast('Stato aggiornato: In corso ▶️');
                 },
             }),
         ]),
     ]);
-    hero.appendChild(content);
+    slide.appendChild(content);
+    return slide;
+}
+
+function goToHeroSlide(index) {
+    const hero = $('#hero');
+    if (!hero) return;
+    const slides = hero.querySelectorAll('.hero-slide');
+    const dots = hero.querySelectorAll('.hero-dot');
+
+    slides.forEach((s, i) => {
+        s.classList.toggle('active', i === index);
+    });
+    dots.forEach((d, i) => {
+        d.classList.toggle('active', i === index);
+    });
+
+    heroCarouselIndex = index;
+
+    // Reset timer on manual navigation
+    if (heroCarouselTimer && heroCarouselItems.length > 1) {
+        clearInterval(heroCarouselTimer);
+        heroCarouselTimer = setInterval(() => {
+            const next = (heroCarouselIndex + 1) % heroCarouselItems.length;
+            goToHeroSlide(next);
+        }, CONFIG.HERO_INTERVAL_MS);
+    }
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1004,6 +1124,11 @@ function renderDetailContent(item) {
     if (year) meta.appendChild(el('span', { className: 'detail-year', textContent: year }));
     info.appendChild(meta);
 
+    // External ratings (async, appended when loaded)
+    const externalRatingsWrap = el('div', { className: 'external-ratings' });
+    info.appendChild(externalRatingsWrap);
+    loadExternalRatings(item.tmdbId, item.mediaType || state.currentTab, externalRatingsWrap);
+
     if (item.genres && item.genres.length) {
         info.appendChild(el('div', {
             className: 'detail-genres',
@@ -1158,6 +1283,58 @@ function renderDetailContent(item) {
 
     body.appendChild(footer);
     container.appendChild(body);
+}
+
+// ──────────────────────────────────────────────────────────────
+// EXTERNAL RATINGS
+// ──────────────────────────────────────────────────────────────
+async function loadExternalRatings(tmdbId, mediaType, containerNode) {
+    if (!tmdbId || !mediaType || !containerNode) return;
+    
+    // Add loading state
+    containerNode.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);"><span class="loading-spinner" style="width: 12px; height: 12px; border-width: 1px; margin-right: 6px; vertical-align: middle;"></span>Recupero recensioni...</span>';
+    
+    // Get IMDb ID from TMDb
+    const externalIds = await TMDB.getExternalIds(tmdbId, mediaType);
+    if (!externalIds || !externalIds.imdb_id) {
+        containerNode.innerHTML = ''; // No IMDb ID found
+        return;
+    }
+    
+    // Fetch from OMDb
+    const omdbData = await OMDB.getByImdbId(externalIds.imdb_id);
+    if (!omdbData) {
+        containerNode.innerHTML = '';
+        return;
+    }
+    
+    const ratings = OMDB.parseRatings(omdbData);
+    containerNode.innerHTML = '';
+    
+    // IMDb Badge
+    if (ratings.imdb) {
+        containerNode.appendChild(el('div', { className: 'rating-badge imdb' }, [
+            el('span', { className: 'rating-badge-icon imdb-icon', textContent: 'IMDb' }),
+            el('span', { textContent: ratings.imdb.score })
+        ]));
+    }
+    
+    // Rotten Tomatoes Badge
+    if (ratings.rottenTomatoes) {
+        const isFresh = parseInt(ratings.rottenTomatoes.score) >= 60;
+        containerNode.appendChild(el('div', { className: 'rating-badge rt' }, [
+            el('span', { className: 'rating-badge-icon rt-icon', textContent: isFresh ? '🍅' : '🤢' }),
+            el('span', { textContent: ratings.rottenTomatoes.score })
+        ]));
+    }
+    
+    // Metacritic Badge
+    if (ratings.metacritic) {
+        containerNode.appendChild(el('div', { className: 'rating-badge mc' }, [
+            el('span', { className: 'rating-badge-icon mc-icon', textContent: 'M' }),
+            el('span', { textContent: ratings.metacritic.score })
+        ]));
+    }
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1523,6 +1700,11 @@ async function openSearchPreview(tmdbResult) {
         meta.appendChild(el('span', { textContent: `${details.number_of_seasons} stagion${details.number_of_seasons === 1 ? 'e' : 'i'}`, style: { color: 'var(--text-muted)' } }));
     }
     info.appendChild(meta);
+
+    // External ratings (async)
+    const externalRatingsWrap = el('div', { className: 'external-ratings' });
+    info.appendChild(externalRatingsWrap);
+    loadExternalRatings(tmdbResult.id, tab, externalRatingsWrap);
 
     // Genres
     const genres = details && details.genres ? details.genres.map(g => g.name) : [];
