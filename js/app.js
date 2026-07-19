@@ -18,9 +18,9 @@ const CONFIG = {
     TMDB_API_KEY: 'e4982dd5be0f6d31838c58597c9c345f',
     TMDB_BASE: 'https://api.themoviedb.org/3',
     TMDB_IMG: 'https://image.tmdb.org/t/p/',
+    APP_PASSWORD: 'divanoletto',
     STORAGE_KEY: 'divanoLetto_data',
     STORAGE_KEY_PROFILE: 'divanoLetto_currentProfile',
-    STORAGE_KEY_PASSWORD: 'divanoLetto_password',
     SESSION_KEY: 'divanoLetto_session',
     DEBOUNCE_MS: 400,
     MAX_IMG_SIZE: 200, // max width/height in px for profile images (to keep localStorage small)
@@ -305,16 +305,8 @@ function saveCurrentProfile(index) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// PASSWORD / AUTH
+// AUTHENTICATION
 // ──────────────────────────────────────────────────────────────
-function getPassword() {
-    return localStorage.getItem(CONFIG.STORAGE_KEY_PASSWORD) || '';
-}
-
-function setPassword(pwd) {
-    localStorage.setItem(CONFIG.STORAGE_KEY_PASSWORD, pwd);
-}
-
 function isLoggedIn() {
     return sessionStorage.getItem(CONFIG.SESSION_KEY) === 'true';
 }
@@ -432,20 +424,7 @@ function showLoginScreen() {
     $('#profile-screen').classList.add('hidden');
     $('#app').classList.add('hidden');
 
-    const pwd = getPassword();
-    const subtitle = $('#login-subtitle');
     const input = $('#password-input');
-
-    if (!pwd) {
-        // First time — set a password
-        subtitle.textContent = 'Crea una password per proteggere il sito';
-        input.placeholder = 'Scegli una password...';
-        $('#login-btn').textContent = 'Crea';
-    } else {
-        subtitle.textContent = 'Inserisci la password per accedere';
-        input.placeholder = 'Password...';
-        $('#login-btn').textContent = 'Entra';
-    }
     input.value = '';
     $('#login-error').classList.add('hidden');
     setTimeout(() => input.focus(), 300);
@@ -461,14 +440,7 @@ function handleLogin() {
         return;
     }
 
-    const storedPwd = getPassword();
-    if (!storedPwd) {
-        // First time — save password
-        setPassword(pwd);
-        setLoggedIn();
-        showToast('Password impostata! 🔒');
-        showProfileScreen();
-    } else if (pwd === storedPwd) {
+    if (pwd === CONFIG.APP_PASSWORD) {
         setLoggedIn();
         showProfileScreen();
     } else {
