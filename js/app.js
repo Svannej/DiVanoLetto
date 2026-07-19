@@ -18,7 +18,7 @@ const CONFIG = {
     TMDB_API_KEY: 'e4982dd5be0f6d31838c58597c9c345f',
     TMDB_BASE: 'https://api.themoviedb.org/3',
     TMDB_IMG: 'https://image.tmdb.org/t/p/',
-    OMDB_API_KEY: '4a8ee498',
+    OMDB_API_KEY: 'thewdb',
     OMDB_BASE: 'https://www.omdbapi.com/',
     APP_PASSWORD: 'divanoletto',
     STORAGE_KEY: 'divanoLetto_data',
@@ -1297,19 +1297,24 @@ async function loadExternalRatings(tmdbId, mediaType, containerNode) {
     // Get IMDb ID from TMDb
     const externalIds = await TMDB.getExternalIds(tmdbId, mediaType);
     if (!externalIds || !externalIds.imdb_id) {
-        containerNode.innerHTML = ''; // No IMDb ID found
+        containerNode.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">Valutazioni esterne non disponibili</span>';
         return;
     }
     
     // Fetch from OMDb
     const omdbData = await OMDB.getByImdbId(externalIds.imdb_id);
-    if (!omdbData) {
-        containerNode.innerHTML = '';
+    if (!omdbData || omdbData.Response === 'False') {
+        containerNode.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">Valutazioni esterne non disponibili</span>';
         return;
     }
     
     const ratings = OMDB.parseRatings(omdbData);
     containerNode.innerHTML = '';
+
+    if (Object.keys(ratings).length === 0) {
+        containerNode.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">Valutazioni esterne non disponibili</span>';
+        return;
+    }
     
     // IMDb Badge
     if (ratings.imdb) {
@@ -1331,7 +1336,7 @@ async function loadExternalRatings(tmdbId, mediaType, containerNode) {
     // Metacritic Badge
     if (ratings.metacritic) {
         containerNode.appendChild(el('div', { className: 'rating-badge mc' }, [
-            el('span', { className: 'rating-badge-icon mc-icon', textContent: 'M' }),
+            el('span', { className: 'rating-badge-icon mc-icon', textContent: 'Metacritic' }),
             el('span', { textContent: ratings.metacritic.score })
         ]));
     }
@@ -1641,7 +1646,11 @@ async function openSearchPreview(tmdbResult) {
         </div>
     `;
 
-    const tab = state.currentTab === 'catalog' ? (state.catalog.filters.type === 'tv' ? 'tv' : 'movie') : state.currentTab;
+    let tab = state.currentTab;
+    if (tab === 'catalog') {
+        tab = state.catalog.filters.type || 'movie';
+    }
+    // TMDB API needs 'tv' for anime, but we keep 'anime' as tab to save in correct list
     const mediaType = tab === 'anime' ? 'tv' : tab;
 
     // Fetch details, credits, and providers in parallel

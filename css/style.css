@@ -760,9 +760,8 @@ img {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(var(--card-width), 1fr));
     gap: var(--card-gap);
-    padding: 12px var(--side-padding);
-    max-height: calc((var(--card-width) * 1.5 + 24px) * 2 + var(--card-gap));
-    overflow: hidden;
+    padding: 20px var(--side-padding);
+    padding-top: 10px;
 }
 
 .row-items-grid .card {
