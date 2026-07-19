@@ -1940,3 +1940,7 @@ img {
         font-size: 2rem;
     }
 }
+
+.profile-img-inline { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; vertical-align: middle; }
+
+.detail-profile-label, .detail-added-info-flex { display: flex; align-items: center; gap: 8px; }

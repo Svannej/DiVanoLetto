@@ -466,13 +466,15 @@ function showToast(message) {
     }, 3000);
 }
 
-function renderAvatar(profile) {
-    const wrap = el('div', { className: profile.image ? 'profile-avatar' : 'profile-avatar profile-emoji' });
-    if (profile.image) {
-        wrap.appendChild(el('img', { className: 'profile-img', src: profile.image, alt: profile.name }));
-    } else {
-        wrap.textContent = profile.emoji;
-    }
+function getProfileImageUrl(profile) {
+    if (!profile) return '';
+    return profile.image || `https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(profile.name || 'User')}&backgroundColor=b6e3f4`;
+}
+
+function renderAvatar(profile, size = 'normal') {
+    const sizeClass = size === 'small' ? 'profile-avatar-sm' : 'profile-avatar';
+    const wrap = el('div', { className: sizeClass });
+    wrap.appendChild(el('img', { className: 'profile-img', src: getProfileImageUrl(profile), alt: profile.name }));
     return wrap;
 }
 
@@ -524,15 +526,11 @@ function renderHeader() {
 
     const headerEl = $('#header-profile-emoji');
     headerEl.innerHTML = '';
-    if (profile.image) {
-        headerEl.appendChild(el('img', {
-            className: 'profile-img',
-            src: profile.image,
-            alt: profile.name,
-        }));
-    } else {
-        headerEl.textContent = profile.emoji;
-    }
+    headerEl.appendChild(el('img', {
+        className: 'profile-img',
+        src: getProfileImageUrl(profile),
+        alt: profile.name,
+    }));
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -703,12 +701,15 @@ function renderCard(item) {
         textContent: getStatusLabel(item.status),
     }));
 
-    // Added by emoji
-    if (state.profiles[item.addedBy]) {
-        card.appendChild(el('div', {
-            className: 'card-added-by',
-            textContent: state.profiles[item.addedBy].emoji,
-        }));
+    const addedProfile = state.profiles[item.addedBy];
+    if (addedProfile) {
+        const addedByImg = el('img', {
+            className: 'profile-img-inline',
+            src: getProfileImageUrl(addedProfile),
+            alt: addedProfile.name,
+            style: { position: 'absolute', top: '8px', right: '8px', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.5))' }
+        });
+        card.appendChild(addedByImg);
     }
 
     // Provider badges (show first 2)
@@ -739,7 +740,14 @@ function renderCard(item) {
             ...(year ? [el('span', { textContent: year })] : []),
         ]),
         ...(addedByProfile ? [
-            el('div', { className: 'card-added-label', textContent: `${addedByProfile.emoji} ${addedByProfile.name}` }),
+            el('div', { className: 'card-added-label' }, [
+                el('img', { 
+                    src: getProfileImageUrl(addedByProfile), 
+                    className: 'profile-img-inline', 
+                    alt: addedByProfile.name 
+                }),
+                el('span', { textContent: ' ' + addedByProfile.name })
+            ]),
         ] : []),
     ]);
     card.appendChild(overlay);
@@ -1008,10 +1016,17 @@ function renderDetailContent(item) {
     // Ratings for each profile
     state.profiles.forEach((profile, pIdx) => {
         const ratingControl = el('div', { className: 'detail-control' });
-        ratingControl.appendChild(el('span', {
-            className: 'detail-control-label',
-            textContent: `${profile.emoji} ${profile.name}`,
-        }));
+        
+        const labelWrap = el('div', { className: 'detail-control-label detail-profile-label' }, [
+            el('img', { 
+                src: getProfileImageUrl(profile), 
+                className: 'profile-img-inline', 
+                alt: profile.name 
+            }),
+            el('span', { textContent: ' ' + profile.name })
+        ]);
+        ratingControl.appendChild(labelWrap);
+        
         const starsContainer = el('div', { className: 'stars-container' });
         const currentRating = (item.ratings && item.ratings[pIdx]) || 0;
         for (let i = 1; i <= 5; i++) {
@@ -1027,7 +1042,7 @@ function renderDetailContent(item) {
                         s.classList.toggle('active', idx < newRating);
                     });
                     if (newRating > 0) {
-                        showToast(`${profile.emoji} ha dato ${'★'.repeat(newRating)}${'☆'.repeat(5 - newRating)}`);
+                        showToast(`${profile.name} ha dato ${'★'.repeat(newRating)}${'☆'.repeat(5 - newRating)}`);
                     }
                 },
             });
@@ -1063,9 +1078,17 @@ function renderDetailContent(item) {
 
     // Added info
     const addedProfile = state.profiles[item.addedBy];
-    const addedInfo = el('div', { className: 'detail-added-info' });
+    const addedInfo = el('div', { className: 'detail-added-info detail-added-info-flex' });
     if (addedProfile) {
-        addedInfo.textContent = `Aggiunto da ${addedProfile.emoji} ${addedProfile.name} • ${formatDate(item.addedAt)}`;
+        addedInfo.appendChild(document.createTextNode('Aggiunto da '));
+        addedInfo.appendChild(
+            el('img', { 
+                src: getProfileImageUrl(addedProfile), 
+                className: 'profile-img-inline',
+                alt: addedProfile.name
+            })
+        );
+        addedInfo.appendChild(document.createTextNode(` ${addedProfile.name} • ${formatDate(item.addedAt)}`));
     }
     footer.appendChild(addedInfo);
 
@@ -1104,15 +1127,11 @@ function renderProfileEditContent() {
         const avatarWrap = el('div', { className: 'profile-edit-avatar-wrap' });
         const avatarDisplay = el('div', { className: 'profile-edit-avatar' });
 
-        if (profile.image) {
-            avatarDisplay.appendChild(el('img', {
-                className: 'profile-img',
-                src: profile.image,
-                alt: profile.name,
-            }));
-        } else {
-            avatarDisplay.textContent = profile.emoji;
-        }
+        avatarDisplay.appendChild(el('img', {
+            className: 'profile-img',
+            src: getProfileImageUrl(profile),
+            alt: profile.name,
+        }));
 
         // Camera overlay
         avatarDisplay.appendChild(el('div', {
@@ -1180,41 +1199,8 @@ function renderProfileEditContent() {
         });
         rightCol.appendChild(nameInput);
 
-        // Emoji selector button (only if no image)
-        if (!profile.image) {
-            const emojiBtn = el('button', {
-                className: 'btn-text emoji-toggle-btn',
-                textContent: `${profile.emoji} Cambia emoji`,
-                onClick: () => toggleEmojiPicker(idx),
-                id: `emoji-btn-${idx}`,
-            });
-            rightCol.appendChild(emojiBtn);
-        }
-
         item.appendChild(rightCol);
         container.appendChild(item);
-
-        // Emoji picker (hidden by default, only if no image)
-        if (!profile.image) {
-            const picker = el('div', {
-                className: 'emoji-picker hidden',
-                id: `emoji-picker-${idx}`,
-            });
-            CONFIG.EMOJI_OPTIONS.forEach(emoji => {
-                picker.appendChild(el('span', {
-                    className: `emoji-option ${emoji === profile.emoji ? 'selected' : ''}`,
-                    textContent: emoji,
-                    onClick: () => {
-                        state.profiles[idx].emoji = emoji;
-                        const btn = $(`#emoji-btn-${idx}`);
-                        if (btn) btn.textContent = `${emoji} Cambia emoji`;
-                        picker.querySelectorAll('.emoji-option').forEach(o => o.classList.remove('selected'));
-                        picker.querySelector(`.emoji-option:nth-child(${CONFIG.EMOJI_OPTIONS.indexOf(emoji) + 1})`).classList.add('selected');
-                    },
-                }));
-            });
-            container.appendChild(picker);
-        }
     });
 
     // ── Password Section ──
@@ -1288,10 +1274,7 @@ function renderProfileEditContent() {
     container.appendChild(actions);
 }
 
-function toggleEmojiPicker(idx) {
-    const picker = $(`#emoji-picker-${idx}`);
-    picker.classList.toggle('hidden');
-}
+
 
 // ──────────────────────────────────────────────────────────────
 // DATA OPERATIONS
