@@ -2,6 +2,15 @@
    DiVanoLetto — Application Logic + TMDB API
    ============================================================ */
 
+window.onerror = function(msg, url, line, col, error) {
+    const errEl = document.getElementById('login-error');
+    if (errEl) {
+        errEl.textContent = 'FATAL ERR: ' + msg + ' (Line ' + line + ')';
+        errEl.classList.remove('hidden');
+    }
+    console.error("FATAL ERROR: ", msg, url, line, col, error);
+};
+
 // ──────────────────────────────────────────────────────────────
 // CONFIGURATION
 // ──────────────────────────────────────────────────────────────
@@ -185,7 +194,16 @@ const TMDB = {
 // ──────────────────────────────────────────────────────────────
 const supabaseUrl = 'https://okokzbyhgsuukdlyrwsc.supabase.co';
 const supabaseKey = 'sb_publishable_g9QdKH-8OYZTjRx6EdImaA_iKN1zcjW';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+let supabase = null;
+try {
+    if (window.supabase) {
+        supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    } else {
+        console.error('Supabase SDK non caricato correttamente dal CDN.');
+    }
+} catch (err) {
+    console.error('Errore inizializzazione Supabase:', err);
+}
 
 async function saveState() {
     // Backup locally
@@ -193,6 +211,8 @@ async function saveState() {
         profiles: state.profiles,
         lists: state.lists,
     }));
+
+    if (!supabase) return;
 
     // Save to Supabase
     try {
@@ -205,65 +225,78 @@ async function saveState() {
     }
 }
 
-async function loadState() {
-    // Local device specific
+function loadState() {
+    // 1. Caricamento locale immediato (così l'app parte istantaneamente)
+    fallbackLoadLocal();
+
     const profileIdx = localStorage.getItem(CONFIG.STORAGE_KEY_PROFILE);
     if (profileIdx !== null) state.currentProfile = parseInt(profileIdx, 10);
 
-    // Fetch from Supabase
-    try {
-        const { data, error } = await supabase.from('app_state').select('data').eq('id', 1).single();
-        if (!error && data && data.data) {
-            const remoteData = data.data;
-            if (remoteData.profiles) state.profiles = remoteData.profiles;
-            if (remoteData.lists) {
-                state.lists.movie = remoteData.lists.movie || [];
-                state.lists.tv = remoteData.lists.tv || [];
-                state.lists.anime = remoteData.lists.anime || [];
-            }
-        }
-    } catch (e) {
-        console.error('Supabase load error:', e);
-        // Fallback to local
-        const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
-        if (saved) {
-            try {
-                const localData = JSON.parse(saved);
-                if (localData.profiles) state.profiles = localData.profiles;
-                if (localData.lists) {
-                    state.lists.movie = localData.lists.movie || [];
-                    state.lists.tv = localData.lists.tv || [];
-                    state.lists.anime = localData.lists.anime || [];
+    // 2. Sincronizzazione Supabase in background (senza bloccare)
+    if (supabase) {
+        supabase.from('app_state').select('data').eq('id', 1).single()
+            .then(({ data, error }) => {
+                if (!error && data && data.data) {
+                    const remoteData = data.data;
+                    if (remoteData.profiles) state.profiles = remoteData.profiles;
+                    if (remoteData.lists) {
+                        state.lists.movie = remoteData.lists.movie || [];
+                        state.lists.tv = remoteData.lists.tv || [];
+                        state.lists.anime = remoteData.lists.anime || [];
+                    }
+                    refreshUIAfterDataChange();
                 }
-            } catch (err) {}
+            })
+            .catch(e => console.error('Supabase load error:', e));
+
+        // Subscribe to realtime changes
+        try {
+            supabase.channel('public:app_state')
+                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_state' }, payload => {
+                    const newData = payload.new.data;
+                    if (newData.profiles) state.profiles = newData.profiles;
+                    if (newData.lists) {
+                        state.lists.movie = newData.lists.movie || [];
+                        state.lists.tv = newData.lists.tv || [];
+                        state.lists.anime = newData.lists.anime || [];
+                    }
+                    refreshUIAfterDataChange();
+                })
+                .subscribe();
+        } catch (err) {
+            console.error('Errore subscribe:', err);
         }
     }
+}
 
-    // Subscribe to realtime changes
-    supabase.channel('public:app_state')
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_state' }, payload => {
-            const newData = payload.new.data;
-            if (newData.profiles) state.profiles = newData.profiles;
-            if (newData.lists) {
-                state.lists.movie = newData.lists.movie || [];
-                state.lists.tv = newData.lists.tv || [];
-                state.lists.anime = newData.lists.anime || [];
+function refreshUIAfterDataChange() {
+    // Re-render UI only if we are in the main app or profile screen
+    if (!$('#app').classList.contains('hidden')) {
+        renderHeader();
+        renderHero();
+        renderContent();
+    }
+    if (!$('#profile-screen').classList.contains('hidden')) {
+        showProfileScreen();
+    }
+    if (!$('#profile-edit-modal').classList.contains('hidden')) {
+        renderProfileEditContent();
+    }
+}
+
+function fallbackLoadLocal() {
+    const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
+    if (saved) {
+        try {
+            const localData = JSON.parse(saved);
+            if (localData.profiles) state.profiles = localData.profiles;
+            if (localData.lists) {
+                state.lists.movie = localData.lists.movie || [];
+                state.lists.tv = localData.lists.tv || [];
+                state.lists.anime = localData.lists.anime || [];
             }
-            
-            // Re-render UI
-            if (!$('#app').classList.contains('hidden')) {
-                renderHeader();
-                renderHero();
-                renderContent();
-            }
-            if (!$('#profile-screen').classList.contains('hidden')) {
-                showProfileScreen();
-            }
-            if (!$('#profile-edit-modal').classList.contains('hidden')) {
-                renderProfileEditContent();
-            }
-        })
-        .subscribe();
+        } catch (err) {}
+    }
 }
 
 function saveCurrentProfile(index) {
@@ -444,6 +477,31 @@ function handleLogin() {
         input.value = '';
         input.focus();
     }
+}
+
+function showToast(message) {
+    let toast = $('#toast');
+    if (!toast) {
+        toast = el('div', { id: 'toast', className: 'toast hidden' });
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    toast.classList.add('show');
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.classList.add('hidden'), 300);
+    }, 3000);
+}
+
+function renderAvatar(profile) {
+    const wrap = el('div', { className: profile.image ? 'profile-avatar' : 'profile-avatar profile-emoji' });
+    if (profile.image) {
+        wrap.appendChild(el('img', { className: 'profile-img', src: profile.image, alt: profile.name }));
+    } else {
+        wrap.textContent = profile.emoji;
+    }
+    return wrap;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1364,8 +1422,12 @@ function switchTab(tab) {
 // EVENT LISTENERS
 // ──────────────────────────────────────────────────────────────
 function setupEventListeners() {
+    console.log('[DEBUG] Attaching event listeners...');
     // Login screen
-    $('#login-btn').addEventListener('click', handleLogin);
+    $('#login-btn').addEventListener('click', () => {
+        console.log('[DEBUG] Login button clicked!');
+        handleLogin();
+    });
     $('#password-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleLogin();
     });
@@ -1423,17 +1485,24 @@ function setupEventListeners() {
 // ──────────────────────────────────────────────────────────────
 // INITIALIZATION
 // ──────────────────────────────────────────────────────────────
-async function init() {
-    await loadState();
+function init() {
+    console.log('[DEBUG] init() started');
+    loadState();
+    console.log('[DEBUG] loadState() finished');
     setupEventListeners();
+    console.log('[DEBUG] setupEventListeners() finished');
 
     if (!isLoggedIn()) {
+        console.log('[DEBUG] Not logged in, showing login screen');
         showLoginScreen();
     } else if (state.currentProfile === null) {
+        console.log('[DEBUG] Logged in, no profile selected, showing profile screen');
         showProfileScreen();
     } else {
+        console.log('[DEBUG] Fully logged in, showing app');
         showApp();
     }
 }
 
+console.log('[DEBUG] DOMContentLoaded listener attached');
 document.addEventListener('DOMContentLoaded', init);
