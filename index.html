@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiVanoLetto — Le nostre liste</title>
+    <meta name="description" content="Liste condivise di film, serie TV e anime per due">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛋️</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ============ API Key Setup Screen ============ -->
+    <div id="setup-screen" class="screen">
+        <div class="setup-container">
+            <div class="setup-logo">🛋️</div>
+            <h1 class="setup-title">DiVanoLetto</h1>
+            <p class="setup-subtitle">Per iniziare, inserisci la tua API key TMDB (gratuita)</p>
+            <div class="setup-steps">
+                <div class="setup-step">
+                    <span class="step-num">1</span>
+                    <span>Registrati su <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener">themoviedb.org</a></span>
+                </div>
+                <div class="setup-step">
+                    <span class="step-num">2</span>
+                    <span>Vai su Settings → API</span>
+                </div>
+                <div class="setup-step">
+                    <span class="step-num">3</span>
+                    <span>Copia la tua API Key (v3 auth)</span>
+                </div>
+            </div>
+            <div class="setup-input-group">
+                <input type="text" id="api-key-input" placeholder="Incolla qui la tua API key..." autocomplete="off" spellcheck="false">
+                <button id="save-api-key" class="btn btn-primary">Inizia</button>
+            </div>
+            <p id="setup-error" class="setup-error hidden">API key non valida. Riprova.</p>
+        </div>
+    </div>
+
+    <!-- ============ Profile Selection Screen ============ -->
+    <div id="profile-screen" class="screen hidden">
+        <div class="profile-screen-inner">
+            <h1 class="profile-screen-title">Chi sta guardando?</h1>
+            <div id="profiles-container" class="profiles-grid"></div>
+            <button id="manage-profiles-btn" class="btn-text">Gestisci profili</button>
+        </div>
+    </div>
+
+    <!-- ============ Main App ============ -->
+    <div id="app" class="hidden">
+        <!-- Header -->
+        <header id="main-header">
+            <div class="header-left">
+                <h1 class="logo" id="logo-home">
+                    <span class="logo-emoji">🛋️</span>
+                    <span class="logo-text">DiVanoLetto</span>
+                </h1>
+                <nav class="nav-tabs" id="nav-tabs">
+                    <button class="nav-tab active" data-tab="movie">🎬 Film</button>
+                    <button class="nav-tab" data-tab="tv">📺 Serie TV</button>
+                    <button class="nav-tab" data-tab="anime">🎌 Anime</button>
+                </nav>
+            </div>
+            <div class="header-right">
+                <button id="btn-search-header" class="icon-btn" title="Cerca e aggiungi">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </button>
+                <div id="header-profile" class="header-profile" title="Cambia profilo">
+                    <span id="header-profile-emoji" class="profile-emoji-sm"></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Mobile Tabs -->
+        <nav class="nav-tabs-mobile" id="nav-tabs-mobile">
+            <button class="nav-tab active" data-tab="movie">🎬 Film</button>
+            <button class="nav-tab" data-tab="tv">📺 Serie TV</button>
+            <button class="nav-tab" data-tab="anime">🎌 Anime</button>
+        </nav>
+
+        <!-- Hero Banner -->
+        <section id="hero"></section>
+
+        <!-- Content Rows -->
+        <main id="main-content"></main>
+
+        <!-- FAB -->
+        <button id="fab-add" class="fab" title="Cerca e aggiungi">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+    </div>
+
+    <!-- ============ Search Modal ============ -->
+    <div id="search-modal" class="modal hidden">
+        <div class="modal-overlay" data-close="search-modal"></div>
+        <div class="modal-content modal-search">
+            <div class="search-header">
+                <div class="search-input-wrap">
+                    <svg class="search-icon-input" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input type="text" id="search-input" autocomplete="off" spellcheck="false">
+                </div>
+                <button class="btn-close" data-close="search-modal">✕</button>
+            </div>
+            <div id="search-results" class="search-results">
+                <div class="search-empty-state">
+                    <div class="search-empty-icon">🔍</div>
+                    <p>Cerca un titolo per aggiungerlo alla tua lista</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ Detail Modal ============ -->
+    <div id="detail-modal" class="modal hidden">
+        <div class="modal-overlay" data-close="detail-modal"></div>
+        <div class="modal-content modal-detail">
+            <button class="btn-close detail-close" data-close="detail-modal">✕</button>
+            <div id="detail-content"></div>
+        </div>
+    </div>
+
+    <!-- ============ Profile Edit Modal ============ -->
+    <div id="profile-edit-modal" class="modal hidden">
+        <div class="modal-overlay" data-close="profile-edit-modal"></div>
+        <div class="modal-content modal-profile-edit">
+            <button class="btn-close" data-close="profile-edit-modal">✕</button>
+            <h2 class="modal-title">Gestisci Profili</h2>
+            <div id="profile-edit-content"></div>
+        </div>
+    </div>
+
+    <!-- ============ Toast Container ============ -->
+    <div id="toast-container"></div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
