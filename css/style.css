@@ -1387,18 +1387,106 @@ img {
 /* Profile Edit Modal */
 .modal-profile-edit {
     width: 90%;
-    max-width: 480px;
+    max-width: 520px;
     padding: 28px;
+}
+
+/* Profile images */
+.profile-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+}
+
+.profile-avatar .profile-img {
+    border-radius: 12px;
+}
+
+.profile-emoji-sm .profile-img {
+    border-radius: 6px;
+}
+
+.profile-avatar-sm {
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-elevated);
 }
 
 .profile-edit-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 16px;
     padding: 16px;
     margin-bottom: 16px;
     background: var(--bg-elevated);
     border-radius: 10px;
+}
+
+.profile-edit-avatar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.profile-edit-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 12px;
+    background: var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all var(--transition-fast);
+    border: 2px solid transparent;
+}
+
+.profile-edit-avatar:hover {
+    border-color: var(--accent);
+}
+
+.profile-edit-avatar .profile-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-upload-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.profile-edit-avatar:hover .avatar-upload-overlay {
+    opacity: 1;
+}
+
+.profile-edit-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.emoji-toggle-btn {
+    text-align: left;
+    padding: 4px 0 !important;
+    font-size: 0.85rem !important;
 }
 
 .profile-edit-emoji {
@@ -1422,6 +1510,7 @@ img {
     color: var(--text-primary);
     font-size: 1rem;
     transition: border-color var(--transition-fast);
+    width: 100%;
 }
 
 .profile-edit-name:focus {
@@ -1459,6 +1548,31 @@ img {
 .emoji-option.selected {
     background: rgba(229, 9, 20, 0.25);
     outline: 2px solid var(--accent);
+}
+
+/* Password change section */
+.profile-edit-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.profile-edit-section-title {
+    font-family: var(--font-body);
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: var(--text-secondary);
+}
+
+.pwd-change-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pwd-change-row input {
+    width: 100%;
 }
 
 .profile-edit-actions {

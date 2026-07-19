@@ -13,31 +13,17 @@
 </head>
 <body>
 
-    <!-- ============ API Key Setup Screen ============ -->
-    <div id="setup-screen" class="screen">
+    <!-- ============ Login Screen ============ -->
+    <div id="login-screen" class="screen">
         <div class="setup-container">
             <div class="setup-logo">🛋️</div>
             <h1 class="setup-title">DiVanoLetto</h1>
-            <p class="setup-subtitle">Per iniziare, inserisci la tua API key TMDB (gratuita)</p>
-            <div class="setup-steps">
-                <div class="setup-step">
-                    <span class="step-num">1</span>
-                    <span>Registrati su <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener">themoviedb.org</a></span>
-                </div>
-                <div class="setup-step">
-                    <span class="step-num">2</span>
-                    <span>Vai su Settings → API</span>
-                </div>
-                <div class="setup-step">
-                    <span class="step-num">3</span>
-                    <span>Copia la tua API Key (v3 auth)</span>
-                </div>
-            </div>
+            <p class="setup-subtitle" id="login-subtitle">Inserisci la password per accedere</p>
             <div class="setup-input-group">
-                <input type="text" id="api-key-input" placeholder="Incolla qui la tua API key..." autocomplete="off" spellcheck="false">
-                <button id="save-api-key" class="btn btn-primary">Inizia</button>
+                <input type="password" id="password-input" placeholder="Password..." autocomplete="current-password">
+                <button id="login-btn" class="btn btn-primary">Entra</button>
             </div>
-            <p id="setup-error" class="setup-error hidden">API key non valida. Riprova.</p>
+            <p id="login-error" class="setup-error hidden">Password errata. Riprova.</p>
         </div>
     </div>
 

@@ -6,12 +6,15 @@
 // CONFIGURATION
 // ──────────────────────────────────────────────────────────────
 const CONFIG = {
+    TMDB_API_KEY: 'e4982dd5be0f6d31838c58597c9c345f',
     TMDB_BASE: 'https://api.themoviedb.org/3',
     TMDB_IMG: 'https://image.tmdb.org/t/p/',
     STORAGE_KEY: 'divanoLetto_data',
-    STORAGE_KEY_API: 'divanoLetto_apiKey',
     STORAGE_KEY_PROFILE: 'divanoLetto_currentProfile',
+    STORAGE_KEY_PASSWORD: 'divanoLetto_password',
+    SESSION_KEY: 'divanoLetto_session',
     DEBOUNCE_MS: 400,
+    MAX_IMG_SIZE: 200, // max width/height in px for profile images (to keep localStorage small)
     EMOJI_OPTIONS: ['😎', '💖', '🦊', '🐱', '👑', '🌸', '🎮', '🎵', '🌙', '⭐', '🔥', '🎭', '🦄', '🐼', '🌺', '💜', '🍕', '🎬', '🧸', '🌈', '🐉', '🦋', '🍿', '🎧'],
 };
 
@@ -19,10 +22,9 @@ const CONFIG = {
 // STATE
 // ──────────────────────────────────────────────────────────────
 let state = {
-    apiKey: '',
     profiles: [
-        { name: 'Io', emoji: '😎' },
-        { name: 'Amore', emoji: '💖' },
+        { name: 'Io', emoji: '😎', image: null },
+        { name: 'Amore', emoji: '💖', image: null },
     ],
     currentProfile: null,
     currentTab: 'movie',
@@ -80,7 +82,7 @@ const el = (tag, attrs = {}, children = []) => {
 const TMDB = {
     _url(path, params = {}) {
         const url = new URL(`${CONFIG.TMDB_BASE}${path}`);
-        url.searchParams.set('api_key', state.apiKey);
+        url.searchParams.set('api_key', CONFIG.TMDB_API_KEY);
         url.searchParams.set('language', 'it-IT');
         for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
         return url.toString();
@@ -143,15 +145,6 @@ const TMDB = {
         return await this._fetch(`/${mediaType}/${id}`);
     },
 
-    async validateKey(key) {
-        try {
-            const res = await fetch(`${CONFIG.TMDB_BASE}/configuration?api_key=${key}`);
-            return res.ok;
-        } catch {
-            return false;
-        }
-    },
-
     imgUrl(path, size = 'w342') {
         if (!path) return null;
         return `${CONFIG.TMDB_IMG}${size}${path}`;
@@ -169,7 +162,6 @@ function saveState() {
 }
 
 function loadState() {
-    state.apiKey = localStorage.getItem(CONFIG.STORAGE_KEY_API) || '';
     const profileIdx = localStorage.getItem(CONFIG.STORAGE_KEY_PROFILE);
     if (profileIdx !== null) state.currentProfile = parseInt(profileIdx, 10);
 
@@ -189,14 +181,70 @@ function loadState() {
     }
 }
 
-function saveApiKey(key) {
-    state.apiKey = key;
-    localStorage.setItem(CONFIG.STORAGE_KEY_API, key);
-}
-
 function saveCurrentProfile(index) {
     state.currentProfile = index;
     localStorage.setItem(CONFIG.STORAGE_KEY_PROFILE, index);
+}
+
+// ──────────────────────────────────────────────────────────────
+// PASSWORD / AUTH
+// ──────────────────────────────────────────────────────────────
+function getPassword() {
+    return localStorage.getItem(CONFIG.STORAGE_KEY_PASSWORD) || '';
+}
+
+function setPassword(pwd) {
+    localStorage.setItem(CONFIG.STORAGE_KEY_PASSWORD, pwd);
+}
+
+function isLoggedIn() {
+    return sessionStorage.getItem(CONFIG.SESSION_KEY) === 'true';
+}
+
+function setLoggedIn() {
+    sessionStorage.setItem(CONFIG.SESSION_KEY, 'true');
+}
+
+// ──────────────────────────────────────────────────────────────
+// PROFILE IMAGE HANDLING
+// ──────────────────────────────────────────────────────────────
+function resizeImage(file, maxSize) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > h) {
+                    if (w > maxSize) { h = h * maxSize / w; w = maxSize; }
+                } else {
+                    if (h > maxSize) { w = w * maxSize / h; h = maxSize; }
+                }
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.85));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+/** Renders a profile avatar element (image or emoji fallback) */
+function renderAvatar(profile, size = 'normal') {
+    const sizeClass = size === 'small' ? 'profile-avatar-sm' : 'profile-avatar';
+    if (profile.image) {
+        const wrap = el('div', { className: sizeClass });
+        wrap.appendChild(el('img', {
+            className: 'profile-img',
+            src: profile.image,
+            alt: profile.name,
+        }));
+        return wrap;
+    }
+    return el('div', { className: sizeClass, textContent: profile.emoji });
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -259,22 +307,65 @@ function isInList(tmdbId, tab) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// RENDERING — SETUP SCREEN
+// RENDERING — LOGIN SCREEN
 // ──────────────────────────────────────────────────────────────
-function showSetupScreen() {
-    $('#setup-screen').classList.remove('hidden');
+function showLoginScreen() {
+    $('#login-screen').classList.remove('hidden');
     $('#profile-screen').classList.add('hidden');
     $('#app').classList.add('hidden');
-    const input = $('#api-key-input');
+
+    const pwd = getPassword();
+    const subtitle = $('#login-subtitle');
+    const input = $('#password-input');
+
+    if (!pwd) {
+        // First time — set a password
+        subtitle.textContent = 'Crea una password per proteggere il sito';
+        input.placeholder = 'Scegli una password...';
+        $('#login-btn').textContent = 'Crea';
+    } else {
+        subtitle.textContent = 'Inserisci la password per accedere';
+        input.placeholder = 'Password...';
+        $('#login-btn').textContent = 'Entra';
+    }
     input.value = '';
+    $('#login-error').classList.add('hidden');
     setTimeout(() => input.focus(), 300);
+}
+
+function handleLogin() {
+    const input = $('#password-input');
+    const pwd = input.value;
+
+    if (!pwd) {
+        $('#login-error').textContent = 'Inserisci una password.';
+        $('#login-error').classList.remove('hidden');
+        return;
+    }
+
+    const storedPwd = getPassword();
+    if (!storedPwd) {
+        // First time — save password
+        setPassword(pwd);
+        setLoggedIn();
+        showToast('Password impostata! 🔒');
+        showProfileScreen();
+    } else if (pwd === storedPwd) {
+        setLoggedIn();
+        showProfileScreen();
+    } else {
+        $('#login-error').textContent = 'Password errata. Riprova.';
+        $('#login-error').classList.remove('hidden');
+        input.value = '';
+        input.focus();
+    }
 }
 
 // ──────────────────────────────────────────────────────────────
 // RENDERING — PROFILE SCREEN
 // ──────────────────────────────────────────────────────────────
 function showProfileScreen() {
-    $('#setup-screen').classList.add('hidden');
+    $('#login-screen').classList.add('hidden');
     $('#profile-screen').classList.remove('hidden');
     $('#app').classList.add('hidden');
 
@@ -282,11 +373,12 @@ function showProfileScreen() {
     container.innerHTML = '';
 
     state.profiles.forEach((profile, idx) => {
+        const avatar = renderAvatar(profile);
         const card = el('div', {
             className: 'profile-card',
             onClick: () => selectProfile(idx),
         }, [
-            el('div', { className: 'profile-avatar', textContent: profile.emoji }),
+            avatar,
             el('span', { className: 'profile-name', textContent: profile.name }),
         ]);
         card.style.animationDelay = `${idx * 0.15}s`;
@@ -303,7 +395,7 @@ function selectProfile(index) {
 // RENDERING — MAIN APP
 // ──────────────────────────────────────────────────────────────
 function showApp() {
-    $('#setup-screen').classList.add('hidden');
+    $('#login-screen').classList.add('hidden');
     $('#profile-screen').classList.add('hidden');
     $('#app').classList.remove('hidden');
     renderHeader();
@@ -313,8 +405,18 @@ function showApp() {
 
 function renderHeader() {
     const profile = state.profiles[state.currentProfile];
-    if (profile) {
-        $('#header-profile-emoji').textContent = profile.emoji;
+    if (!profile) return;
+
+    const headerEl = $('#header-profile-emoji');
+    headerEl.innerHTML = '';
+    if (profile.image) {
+        headerEl.appendChild(el('img', {
+            className: 'profile-img',
+            src: profile.image,
+            alt: profile.name,
+        }));
+    } else {
+        headerEl.textContent = profile.emoji;
     }
 }
 
@@ -838,14 +940,73 @@ function renderProfileEditContent() {
     state.profiles.forEach((profile, idx) => {
         const item = el('div', { className: 'profile-edit-item' });
 
-        // Emoji selector
-        const emojiBtn = el('span', {
-            className: 'profile-edit-emoji',
-            textContent: profile.emoji,
-            onClick: () => toggleEmojiPicker(idx),
-            id: `emoji-btn-${idx}`,
+        // Avatar (clickable to upload image)
+        const avatarWrap = el('div', { className: 'profile-edit-avatar-wrap' });
+        const avatarDisplay = el('div', { className: 'profile-edit-avatar' });
+
+        if (profile.image) {
+            avatarDisplay.appendChild(el('img', {
+                className: 'profile-img',
+                src: profile.image,
+                alt: profile.name,
+            }));
+        } else {
+            avatarDisplay.textContent = profile.emoji;
+        }
+
+        // Camera overlay
+        avatarDisplay.appendChild(el('div', {
+            className: 'avatar-upload-overlay',
+            textContent: '📷',
+        }));
+
+        // Hidden file input
+        const fileInput = el('input', {
+            type: 'file',
+            accept: 'image/*',
+            className: 'hidden',
+            id: `profile-img-input-${idx}`,
         });
-        item.appendChild(emojiBtn);
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const dataUrl = await resizeImage(file, CONFIG.MAX_IMG_SIZE);
+            state.profiles[idx].image = dataUrl;
+            // Update avatar display
+            avatarDisplay.innerHTML = '';
+            avatarDisplay.appendChild(el('img', {
+                className: 'profile-img',
+                src: dataUrl,
+                alt: profile.name,
+            }));
+            avatarDisplay.appendChild(el('div', {
+                className: 'avatar-upload-overlay',
+                textContent: '📷',
+            }));
+        });
+
+        avatarDisplay.addEventListener('click', () => fileInput.click());
+        avatarWrap.appendChild(avatarDisplay);
+        avatarWrap.appendChild(fileInput);
+
+        // Remove image button (if image exists)
+        if (profile.image) {
+            const removeImgBtn = el('button', {
+                className: 'btn-text',
+                textContent: '✕ Rimuovi foto',
+                style: { fontSize: '0.75rem', padding: '4px 0', color: 'var(--text-muted)' },
+                onClick: () => {
+                    state.profiles[idx].image = null;
+                    renderProfileEditContent(); // re-render
+                },
+            });
+            avatarWrap.appendChild(removeImgBtn);
+        }
+
+        item.appendChild(avatarWrap);
+
+        // Right column: name + emoji picker
+        const rightCol = el('div', { className: 'profile-edit-right' });
 
         // Name input
         const nameInput = el('input', {
@@ -857,39 +1018,110 @@ function renderProfileEditContent() {
         nameInput.addEventListener('input', (e) => {
             state.profiles[idx].name = e.target.value;
         });
-        item.appendChild(nameInput);
+        rightCol.appendChild(nameInput);
 
+        // Emoji selector button (only if no image)
+        if (!profile.image) {
+            const emojiBtn = el('button', {
+                className: 'btn-text emoji-toggle-btn',
+                textContent: `${profile.emoji} Cambia emoji`,
+                onClick: () => toggleEmojiPicker(idx),
+                id: `emoji-btn-${idx}`,
+            });
+            rightCol.appendChild(emojiBtn);
+        }
+
+        item.appendChild(rightCol);
         container.appendChild(item);
 
-        // Emoji picker (hidden by default)
-        const picker = el('div', {
-            className: 'emoji-picker hidden',
-            id: `emoji-picker-${idx}`,
-        });
-        CONFIG.EMOJI_OPTIONS.forEach(emoji => {
-            picker.appendChild(el('span', {
-                className: `emoji-option ${emoji === profile.emoji ? 'selected' : ''}`,
-                textContent: emoji,
-                onClick: () => {
-                    state.profiles[idx].emoji = emoji;
-                    emojiBtn.textContent = emoji;
-                    picker.querySelectorAll('.emoji-option').forEach(o => o.classList.remove('selected'));
-                    picker.querySelector(`.emoji-option:nth-child(${CONFIG.EMOJI_OPTIONS.indexOf(emoji) + 1})`).classList.add('selected');
-                },
-            }));
-        });
-        container.appendChild(picker);
+        // Emoji picker (hidden by default, only if no image)
+        if (!profile.image) {
+            const picker = el('div', {
+                className: 'emoji-picker hidden',
+                id: `emoji-picker-${idx}`,
+            });
+            CONFIG.EMOJI_OPTIONS.forEach(emoji => {
+                picker.appendChild(el('span', {
+                    className: `emoji-option ${emoji === profile.emoji ? 'selected' : ''}`,
+                    textContent: emoji,
+                    onClick: () => {
+                        state.profiles[idx].emoji = emoji;
+                        const btn = $(`#emoji-btn-${idx}`);
+                        if (btn) btn.textContent = `${emoji} Cambia emoji`;
+                        picker.querySelectorAll('.emoji-option').forEach(o => o.classList.remove('selected'));
+                        picker.querySelector(`.emoji-option:nth-child(${CONFIG.EMOJI_OPTIONS.indexOf(emoji) + 1})`).classList.add('selected');
+                    },
+                }));
+            });
+            container.appendChild(picker);
+        }
     });
 
-    // Save button
+    // ── Password Section ──
+    const pwdSection = el('div', { className: 'profile-edit-section' });
+    pwdSection.appendChild(el('h3', {
+        className: 'profile-edit-section-title',
+        textContent: '🔒 Cambia Password',
+    }));
+
+    const pwdRow = el('div', { className: 'pwd-change-row' });
+    const newPwdInput = el('input', {
+        className: 'profile-edit-name',
+        type: 'password',
+        placeholder: 'Nuova password...',
+        id: 'new-password-input',
+    });
+    const confirmPwdInput = el('input', {
+        className: 'profile-edit-name',
+        type: 'password',
+        placeholder: 'Conferma password...',
+        id: 'confirm-password-input',
+    });
+    const pwdError = el('p', {
+        className: 'setup-error hidden',
+        id: 'pwd-change-error',
+    });
+    const changePwdBtn = el('button', {
+        className: 'btn btn-secondary',
+        textContent: 'Aggiorna',
+        style: { marginTop: '8px' },
+        onClick: () => {
+            const newPwd = newPwdInput.value;
+            const confirmPwd = confirmPwdInput.value;
+            if (!newPwd) {
+                pwdError.textContent = 'Inserisci una nuova password.';
+                pwdError.classList.remove('hidden');
+                return;
+            }
+            if (newPwd !== confirmPwd) {
+                pwdError.textContent = 'Le password non corrispondono.';
+                pwdError.classList.remove('hidden');
+                return;
+            }
+            setPassword(newPwd);
+            pwdError.classList.add('hidden');
+            newPwdInput.value = '';
+            confirmPwdInput.value = '';
+            showToast('Password aggiornata! 🔒');
+        },
+    });
+    pwdRow.appendChild(newPwdInput);
+    pwdRow.appendChild(confirmPwdInput);
+    pwdRow.appendChild(pwdError);
+    pwdRow.appendChild(changePwdBtn);
+    pwdSection.appendChild(pwdRow);
+    container.appendChild(pwdSection);
+
+    // ── Save Button ──
     const actions = el('div', { className: 'profile-edit-actions' });
     actions.appendChild(el('button', {
         className: 'btn btn-primary',
-        textContent: 'Salva',
+        textContent: 'Salva Profili',
         onClick: () => {
             saveState();
             closeModal('profile-edit-modal');
             renderHeader();
+            showProfileScreen();
             showToast('Profili aggiornati ✓');
         },
     }));
@@ -998,29 +1230,10 @@ function switchTab(tab) {
 // EVENT LISTENERS
 // ──────────────────────────────────────────────────────────────
 function setupEventListeners() {
-    // Setup screen — Save API key
-    $('#save-api-key').addEventListener('click', async () => {
-        const key = $('#api-key-input').value.trim();
-        if (!key) {
-            $('#setup-error').classList.remove('hidden');
-            return;
-        }
-        $('#save-api-key').textContent = 'Verifico...';
-        $('#save-api-key').disabled = true;
-        const valid = await TMDB.validateKey(key);
-        if (valid) {
-            saveApiKey(key);
-            showProfileScreen();
-        } else {
-            $('#setup-error').classList.remove('hidden');
-        }
-        $('#save-api-key').textContent = 'Inizia';
-        $('#save-api-key').disabled = false;
-    });
-
-    // Setup — Enter key
-    $('#api-key-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') $('#save-api-key').click();
+    // Login screen
+    $('#login-btn').addEventListener('click', handleLogin);
+    $('#password-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleLogin();
     });
 
     // Profile management
@@ -1063,7 +1276,6 @@ function setupEventListeners() {
     });
 
     // Header scroll effect
-    let lastScroll = 0;
     window.addEventListener('scroll', () => {
         const header = $('#main-header');
         if (window.scrollY > 50) {
@@ -1071,7 +1283,6 @@ function setupEventListeners() {
         } else {
             header.classList.remove('scrolled');
         }
-        lastScroll = window.scrollY;
     }, { passive: true });
 }
 
@@ -1082,8 +1293,8 @@ function init() {
     loadState();
     setupEventListeners();
 
-    if (!state.apiKey) {
-        showSetupScreen();
+    if (!isLoggedIn()) {
+        showLoginScreen();
     } else if (state.currentProfile === null) {
         showProfileScreen();
     } else {
