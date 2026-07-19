@@ -610,19 +610,26 @@ function renderHero() {
 function renderContent() {
     const main = $('#main-content');
     main.innerHTML = '';
-    const list = state.lists[state.currentTab];
+    try {
+        const list = state.lists[state.currentTab];
 
-    const statuses = [
-        { key: 'to_watch', label: 'Da vedere', emoji: '🍿' },
-        { key: 'watching', label: 'In corso', emoji: '▶️' },
-        { key: 'watched', label: 'Visti', emoji: '✅' },
-    ];
+        const statuses = [
+            { key: 'to_watch', label: 'Da vedere', emoji: '🍿' },
+            { key: 'watching', label: 'In corso', emoji: '▶️' },
+            { key: 'watched', label: 'Visti', emoji: '✅' },
+        ];
 
-    statuses.forEach(({ key, label, emoji }) => {
-        const items = list.filter(i => i.status === key);
-        const row = renderRow(items, label, emoji, key);
-        main.appendChild(row);
-    });
+        statuses.forEach(({ key, label, emoji }) => {
+            const items = list.filter(i => i.status === key);
+            const row = renderRow(items, label, emoji, key);
+            main.appendChild(row);
+        });
+    } catch (err) {
+        main.innerHTML = `<div style="padding: 20px; background: red; color: white; font-size: 20px;">
+            <h2>Crash in renderContent</h2>
+            <pre>${err.message}\n${err.stack}</pre>
+        </div>`;
+    }
 }
 
 function renderRow(items, label, emoji, statusKey) {
