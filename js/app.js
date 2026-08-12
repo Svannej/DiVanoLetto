@@ -720,14 +720,25 @@ function buildHeroSlide(item) {
                 textContent: 'ℹ️ Dettagli',
                 onClick: () => openDetailModal(item),
             }),
-            el('button', {
-                className: 'btn btn-secondary',
-                textContent: '▶️ In corso',
-                onClick: () => {
-                    updateItemStatus(item.tmdbId, 'watching');
-                    showToast('Stato aggiornato: In corso ▶️');
-                },
-            }),
+            ...(state.currentTab !== 'movie' ? [
+                el('button', {
+                    className: 'btn btn-secondary',
+                    textContent: '▶️ In corso',
+                    onClick: () => {
+                        updateItemStatus(item.tmdbId, 'watching');
+                        showToast('Stato aggiornato: In corso ▶️');
+                    },
+                })
+            ] : [
+                el('button', {
+                    className: 'btn btn-secondary',
+                    textContent: '✅ Visto',
+                    onClick: () => {
+                        updateItemStatus(item.tmdbId, 'watched');
+                        showToast('Stato aggiornato: Visto ✅');
+                    },
+                })
+            ]),
         ]),
     ]);
     slide.appendChild(content);
@@ -768,11 +779,15 @@ function renderContent() {
     try {
         const list = state.lists[state.currentTab];
 
-        const statuses = [
+        let statuses = [
             { key: 'to_watch', label: 'Da vedere', emoji: '🍿' },
             { key: 'watching', label: 'In corso', emoji: '▶️' },
             { key: 'watched', label: 'Visti', emoji: '✅' },
         ];
+        
+        if (state.currentTab === 'movie') {
+            statuses = statuses.filter(s => s.key !== 'watching');
+        }
 
         statuses.forEach(({ key, label, emoji }) => {
             let items = list.filter(i => i.status === key);
@@ -1218,17 +1233,21 @@ async function renderDetailContent(item) {
     // Status selector
     const statusControl = el('div', { className: 'detail-control' });
     statusControl.appendChild(el('span', { className: 'detail-control-label', textContent: 'Stato' }));
+    const options = [
+        el('option', { value: 'to_watch', textContent: '🍿 Da vedere', ...(item.status === 'to_watch' ? { selected: '' } : {}) }),
+        el('option', { value: 'watched', textContent: '✅ Visto', ...(item.status === 'watched' ? { selected: '' } : {}) }),
+    ];
+    if (state.currentTab !== 'movie') {
+        options.splice(1, 0, el('option', { value: 'watching', textContent: '▶️ In corso', ...(item.status === 'watching' ? { selected: '' } : {}) }));
+    }
+
     const select = el('select', {
         className: 'detail-select',
         onChange: (e) => {
             updateItemStatus(item.tmdbId, e.target.value);
             showToast(`Stato: ${getStatusLabel(e.target.value)} ${getStatusEmoji(e.target.value)}`);
         },
-    }, [
-        el('option', { value: 'to_watch', textContent: '🍿 Da vedere', ...(item.status === 'to_watch' ? { selected: '' } : {}) }),
-        el('option', { value: 'watching', textContent: '▶️ In corso', ...(item.status === 'watching' ? { selected: '' } : {}) }),
-        el('option', { value: 'watched', textContent: '✅ Visto', ...(item.status === 'watched' ? { selected: '' } : {}) }),
-    ]);
+    }, options);
     select.value = item.status;
     statusControl.appendChild(select);
     controls.appendChild(statusControl);
