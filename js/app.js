@@ -775,7 +775,15 @@ function renderContent() {
         ];
 
         statuses.forEach(({ key, label, emoji }) => {
-            const items = list.filter(i => i.status === key);
+            let items = list.filter(i => i.status === key);
+            // Sort 'watched' items: most recently watched first
+            if (key === 'watched') {
+                items.sort((a, b) => {
+                    const dateA = a.statusChangedAt || a.addedAt || '';
+                    const dateB = b.statusChangedAt || b.addedAt || '';
+                    return dateB.localeCompare(dateA);
+                });
+            }
             const row = renderRow(items, label, emoji, key);
             main.appendChild(row);
         });
@@ -1071,9 +1079,16 @@ function openDetailModal(item) {
     renderDetailContent(item);
 }
 
-function renderDetailContent(item) {
+async function renderDetailContent(item) {
     const container = $('#detail-content');
     container.innerHTML = '';
+
+    // Fetch credits and details in parallel for cast and season info
+    const mediaType = item.mediaType || state.currentTab;
+    const [credits, tmdbDetails] = await Promise.all([
+        TMDB.getCredits(item.tmdbId, mediaType),
+        TMDB.getDetails(item.tmdbId, mediaType),
+    ]);
 
     // Backdrop
     const backdropWrap = el('div', { className: 'detail-backdrop-wrap' });
@@ -1122,6 +1137,14 @@ function renderDetailContent(item) {
     }
     const year = getYear(item);
     if (year) meta.appendChild(el('span', { className: 'detail-year', textContent: year }));
+
+    // Season and episode count for TV/anime
+    if (tmdbDetails && tmdbDetails.number_of_seasons) {
+        meta.appendChild(el('span', { textContent: `${tmdbDetails.number_of_seasons} stagion${tmdbDetails.number_of_seasons === 1 ? 'e' : 'i'}`, style: { color: 'var(--text-muted)' } }));
+    }
+    if (tmdbDetails && tmdbDetails.number_of_episodes) {
+        meta.appendChild(el('span', { textContent: `${tmdbDetails.number_of_episodes} episod${tmdbDetails.number_of_episodes === 1 ? 'io' : 'i'}`, style: { color: 'var(--text-muted)' } }));
+    }
     info.appendChild(meta);
 
     // External ratings (async, appended when loaded)
@@ -1142,6 +1165,25 @@ function renderDetailContent(item) {
     // Overview
     if (item.overview) {
         body.appendChild(el('p', { className: 'detail-overview', textContent: item.overview }));
+    }
+
+    // Cast section
+    if (credits && credits.length > 0) {
+        const castSection = el('div', { className: 'preview-cast-section' });
+        castSection.appendChild(el('span', { className: 'preview-cast-label', textContent: '🎭 Cast principale' }));
+        const castList = el('div', { className: 'preview-cast-list' });
+        credits.forEach(actor => {
+            const imgUrl = actor.profile_path ? TMDB.imgUrl(actor.profile_path, 'w185') : null;
+            const castItem = el('div', { className: 'preview-cast-item' }, [
+                imgUrl ? el('img', { className: 'preview-cast-img', src: imgUrl, alt: actor.name, loading: 'lazy' })
+                       : el('div', { className: 'preview-cast-img', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }, textContent: '👤' }),
+                el('span', { className: 'preview-cast-name', textContent: actor.name }),
+                el('span', { className: 'preview-cast-character', textContent: actor.character || '' }),
+            ]);
+            castList.appendChild(castItem);
+        });
+        castSection.appendChild(castList);
+        body.appendChild(castSection);
     }
 
     // Watch Providers
@@ -1572,6 +1614,7 @@ function updateItemStatus(tmdbId, newStatus) {
     const item = state.lists[tab].find(i => i.tmdbId === tmdbId);
     if (item) {
         item.status = newStatus;
+        item.statusChangedAt = new Date().toISOString();
         saveState();
         renderHero();
         renderContent();
@@ -1707,6 +1750,9 @@ async function openSearchPreview(tmdbResult) {
     }
     if (details && details.number_of_seasons) {
         meta.appendChild(el('span', { textContent: `${details.number_of_seasons} stagion${details.number_of_seasons === 1 ? 'e' : 'i'}`, style: { color: 'var(--text-muted)' } }));
+    }
+    if (details && details.number_of_episodes) {
+        meta.appendChild(el('span', { textContent: `${details.number_of_episodes} episod${details.number_of_episodes === 1 ? 'io' : 'i'}`, style: { color: 'var(--text-muted)' } }));
     }
     info.appendChild(meta);
 

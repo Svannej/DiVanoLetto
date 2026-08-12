@@ -2554,6 +2554,91 @@ img {
         display: none;
     }
 
+    /* Hero mobile fixes */
+    .hero-content {
+        max-width: 100%;
+        padding-right: 10px;
+    }
+
+    .hero-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 0.8rem;
+    }
+
+    .hero-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .hero-actions .btn {
+        flex: 1;
+        min-width: 0;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .hero-badge {
+        font-size: 0.7rem;
+        padding: 3px 8px;
+    }
+
+    /* Card overlaps fix */
+    .card-status {
+        font-size: 0.6rem;
+        padding: 2px 6px;
+    }
+
+    .profile-img-inline {
+        width: 20px;
+        height: 20px;
+    }
+
+    .card .profile-img-inline {
+        width: 22px;
+        height: 22px;
+    }
+
+    /* Detail modal mobile */
+    .detail-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .detail-poster {
+        width: 140px;
+    }
+
+    .detail-info {
+        align-items: center;
+    }
+
+    .detail-meta {
+        justify-content: center;
+    }
+
+    .detail-genres {
+        text-align: center;
+    }
+
+    .detail-footer {
+        flex-direction: column;
+        gap: 12px;
+        align-items: center;
+        text-align: center;
+    }
+
+    .detail-added-info {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    /* External ratings mobile */
+    .external-ratings {
+        justify-content: center;
+    }
+
     /* Catalog responsive */
     #catalog-page {
         padding-top: calc(var(--header-height) + 56px);
@@ -2625,6 +2710,95 @@ img {
     .catalog-filter-group {
         min-width: unset;
         flex: 1 1 45%;
+    }
+
+    .hero-slide {
+        padding-bottom: 40px;
+    }
+
+    .hero-title {
+        font-size: 1.5rem;
+    }
+
+    .hero-overview {
+        font-size: 0.8rem;
+        -webkit-line-clamp: 2;
+    }
+
+    .hero-actions .btn {
+        padding: 7px 12px;
+        font-size: 0.8rem;
+    }
+
+    #hero {
+        min-height: 40vh;
+    }
+
+    .hero-dots {
+        bottom: 12px;
+    }
+
+    .row-items-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 6px;
+    }
+
+    .detail-body {
+        padding: 0 14px 14px;
+    }
+
+    .detail-title {
+        font-size: 1.4rem;
+    }
+
+    .detail-poster {
+        width: 120px;
+    }
+
+    .detail-overview {
+        font-size: 0.85rem;
+    }
+
+    .preview-cast-item {
+        width: 55px;
+    }
+
+    .preview-cast-img {
+        width: 42px;
+        height: 42px;
+    }
+
+    .preview-cast-name {
+        font-size: 0.65rem;
+    }
+
+    .preview-cast-character {
+        font-size: 0.58rem;
+    }
+
+    .provider-badge {
+        padding: 4px 8px 4px 4px;
+    }
+
+    .provider-logo {
+        width: 24px;
+        height: 24px;
+    }
+
+    .provider-name {
+        font-size: 0.78rem;
+    }
+
+    .fab {
+        bottom: 20px;
+        right: 20px;
+        width: 48px;
+        height: 48px;
+    }
+
+    .fab svg {
+        width: 22px;
+        height: 22px;
     }
 }
 
