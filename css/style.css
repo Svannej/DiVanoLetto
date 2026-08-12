@@ -2482,6 +2482,13 @@ img {
         padding: 6px 12px;
         font-size: 0.82rem;
         white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .nav-tabs-mobile::after {
+        content: '';
+        padding-right: 12px;
+        flex-shrink: 0;
     }
 
     .logo-text {
@@ -2494,13 +2501,15 @@ img {
 
     /* ---- Hero ---- */
     #hero {
-        min-height: 38vh;
-        max-height: 50vh;
+        min-height: 50vh;
+        max-height: 65vh;
         margin-top: 0;
+        padding-top: calc(var(--header-height) + 44px);
         padding-bottom: 40px;
     }
 
     .hero-slide {
+        padding-top: calc(var(--header-height) + 44px);
         padding-bottom: 44px;
     }
 
@@ -2761,12 +2770,12 @@ img {
 
     /* ---- Hero ---- */
     #hero {
-        min-height: 35vh;
-        max-height: 45vh;
+        min-height: 48vh;
+        max-height: 60vh;
     }
 
     .hero-slide {
-        padding-bottom: 36px;
+        padding-bottom: 32px;
     }
 
     .hero-title {
