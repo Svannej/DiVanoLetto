@@ -321,7 +321,7 @@ img {
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--text-primary);
-    font-size: 0.95rem;
+    font-size: 16px; /* Must be at least 16px to prevent iOS zoom */
     transition: border-color var(--transition-fast);
 }
 
@@ -1068,7 +1068,7 @@ img {
 
 #search-input {
     width: 100%;
-    font-size: 1rem;
+    font-size: 16px; /* Must be at least 16px to prevent iOS zoom */
     color: var(--text-primary);
 }
 
@@ -2462,16 +2462,19 @@ img {
 
     .nav-tabs-mobile {
         display: flex;
-        gap: 2px;
-        padding: 6px var(--side-padding);
-        position: sticky;
-        top: var(--header-height);
-        z-index: calc(var(--z-header) - 1);
-        background: var(--bg-primary);
-        overflow-x: auto;
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-        border-bottom: 1px solid var(--border);
+        justify-content: space-around;
+        gap: 0;
+        padding: 10px 8px 24px 8px; /* Extra padding at bottom for iOS home indicator */
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: rgba(15, 15, 15, 0.75);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        border-bottom: none;
     }
 
     .nav-tabs-mobile::-webkit-scrollbar {
@@ -2479,16 +2482,16 @@ img {
     }
 
     .nav-tabs-mobile .nav-tab {
-        padding: 6px 12px;
-        font-size: 0.82rem;
+        flex: 1;
+        padding: 8px 4px;
+        font-size: 0.75rem;
         white-space: nowrap;
-        flex-shrink: 0;
+        text-align: center;
+        border-radius: 8px;
     }
 
-    .nav-tabs-mobile::after {
-        content: '';
-        padding-right: 12px;
-        flex-shrink: 0;
+    .nav-tabs-mobile .nav-tab.active {
+        background: rgba(255, 255, 255, 0.15);
     }
 
     .logo-text {
@@ -2501,16 +2504,16 @@ img {
 
     /* ---- Hero ---- */
     #hero {
-        min-height: 50vh;
-        max-height: 65vh;
+        min-height: 40vh;
+        max-height: 50vh;
         margin-top: 0;
-        padding-top: calc(var(--header-height) + 44px);
+        padding-top: var(--header-height);
         padding-bottom: 40px;
     }
 
     .hero-slide {
-        padding-top: calc(var(--header-height) + 44px);
-        padding-bottom: 44px;
+        padding-top: var(--header-height);
+        padding-bottom: 40px;
     }
 
     .hero-content {
@@ -2739,7 +2742,8 @@ img {
 
     /* ---- Catalog ---- */
     #catalog-page {
-        padding-top: calc(var(--header-height) + 48px);
+        padding-top: calc(var(--header-height) + 20px);
+        padding-bottom: 100px;
     }
 
     .catalog-title {
@@ -3002,7 +3006,7 @@ img {
     }
 
     #search-input {
-        font-size: 0.9rem;
+        font-size: 16px; /* Must be at least 16px to prevent iOS zoom */
     }
 
     .search-grid {
